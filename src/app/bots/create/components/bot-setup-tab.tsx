@@ -68,12 +68,21 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
   const filteredPairs = filterTradingPairs(pairSearch)
   const showDropdown = isSearchFocused || pairSearch.length > 0
 
-  const handleCreate = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name || !formData.pair) return
+
     setIsCreating(true)
     setError('')
 
     try {
       const botSecret = await generateSecureSecret()
+
+      // Get current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        throw new Error('Not authenticated')
+      }
 
       const { error: createError } = await supabase
         .from('bots')
@@ -81,7 +90,7 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
           name: formData.name,
           pair: formData.pair,
           secret: botSecret,
-          user_id: 'default_user',
+          user_id: user.id,
           status: 'active'
         })
 
@@ -164,7 +173,7 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
             Cancel
           </button>
           <button
-            onClick={handleCreate}
+            onClick={handleSubmit}
             disabled={isCreating || !formData.name || !formData.pair}
             className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >

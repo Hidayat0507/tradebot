@@ -1,20 +1,32 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useRouter, useParams } from "next/navigation"
 import { supabase } from '@/lib/database/client'
 import { Button } from "@/components/ui/button"
-import type { Database } from '@/lib/database/schema'
+import { Card } from "@/components/ui/card"
 
-type Bot = Database['public']['Tables']['bots']['Row']
+type Bot = {
+  id: string
+  name: string
+  user_id: string
+  exchange: string
+  pair: string
+  max_position_size: number
+  stoploss_percentage: number | null
+  status: 'active' | 'paused' | 'stopped'
+  webhook_secret: string
+  created_at: string
+  updated_at: string
+}
 
 export default function BotDetailsPage() {
+  const router = useRouter()
   const params = useParams()
   const [bot, setBot] = useState<Bot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [webhookUrlCopied, setWebhookUrlCopied] = useState(false)
-  const [secretCopied, setSecretCopied] = useState(false)
 
   useEffect(() => {
     loadBot()
@@ -30,6 +42,8 @@ export default function BotDetailsPage() {
         .single()
 
       if (loadError) throw loadError
+      if (!data) throw new Error('Bot not found')
+      
       setBot(data)
     } catch (err: any) {
       console.error('Error loading bot:', err)
@@ -50,104 +64,125 @@ export default function BotDetailsPage() {
   }
 
   if (loading) {
-    return <div className="p-4">Loading bot details...</div>
+    return (
+      <div className="page-background">
+        <div className="page-container">
+          <div className="page-content">
+            <div className="animate-pulse">Loading bot details...</div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!bot) {
-    return <div className="p-4">Bot not found</div>
-  }
-
-  const webhookUrl = `${window.location.origin}/api/webhook?botId=${bot.id}`
-
-  return (
-    <div className="page-container">
-      <h1 className="page-title mb-6">{bot.name}</h1>
-
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="space-y-6">
-        {/* Bot Details */}
-        <div className="content-card">
-          <h2 className="section-title mb-4">Bot Configuration</h2>
-          <div className="space-y-2">
-            <p>Exchange: <span className="font-medium">{bot.exchange}</span></p>
-            <p>Trading Pair: <span className="font-medium">{bot.pair}</span></p>
-            <p>Max Position Size: <span className="font-medium">${bot.max_position_size}</span></p>
-            {bot.stoploss_percentage && (
-              <p>Stoploss: <span className="font-medium">{bot.stoploss_percentage}%</span></p>
-            )}
-            <p>Status: <span className={`px-2 py-1 text-sm font-medium rounded-full ${
-              bot.enabled 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
-                : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-            }`}>
-              {bot.enabled ? 'Active' : 'Inactive'}
-            </span></p>
+    return (
+      <div className="page-background">
+        <div className="page-container">
+          <div className="page-content">
+            <div className="text-red-500">Bot not found</div>
           </div>
         </div>
+      </div>
+    )
+  }
 
-        {/* Webhook Information */}
-        <div className="content-card">
-          <h2 className="section-title mb-4">Webhook Configuration</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Webhook URL
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={webhookUrl}
-                  className="flex-1 p-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md"
-                />
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => copyToClipboard(webhookUrl, setWebhookUrlCopied)}
-                >
-                  {webhookUrlCopied ? 'Copied!' : 'Copy'}
-                </Button>
-              </div>
+  const webhookUrl = `${window.location.origin}/api/webhook`
+
+  return (
+    <div className="page-background">
+      <div className="page-container">
+        <div className="page-content">
+          <div className="mb-8">
+            <h1 className="page-title font-bold text-3xl text-gray-900 dark:text-white">{bot.name}</h1>
+            <p className="page-subtitle text-lg text-gray-500 dark:text-gray-300">
+              Manage your bot settings and view webhook configuration.
+            </p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300">
+              {error}
             </div>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Webhook Secret
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={bot.webhook_secret}
-                  className="flex-1 p-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md"
-                />
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => copyToClipboard(bot.webhook_secret, setSecretCopied)}
-                >
-                  {secretCopied ? 'Copied!' : 'Copy'}
-                </Button>
+          <div className="grid gap-6">
+            <Card className="p-6 bg-white dark:bg-gray-900">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Bot Configuration</h2>
+              <div className="grid gap-4">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-gray-600 dark:text-gray-300">Bot ID</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{bot.id}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-gray-600 dark:text-gray-300">Trading Pair</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{bot.pair}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600 dark:text-gray-300">Status</span>
+                  <span className={`px-2 py-1 text-sm font-medium rounded-full ${
+                    bot.status === 'active'
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                  }`}>
+                    {bot.status}
+                  </span>
+                </div>
               </div>
-            </div>
+            </Card>
 
-            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
-              <h3 className="text-sm font-medium mb-2">TradingView Alert Message Example:</h3>
-              <pre className="text-xs bg-gray-100 dark:bg-gray-900 p-2 rounded overflow-x-auto">
+            <Card className="p-6 bg-white dark:bg-gray-900">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Webhook Configuration</h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Webhook URL
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={webhookUrl}
+                      className="flex-1 p-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white"
+                    />
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => copyToClipboard(webhookUrl, setWebhookUrlCopied)}
+                    >
+                      {webhookUrlCopied ? 'Copied!' : 'Copy'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">TradingView Alert Message Example:</h3>
+                  <div className="space-y-4">
+                    <pre className="text-xs bg-white dark:bg-gray-900 p-3 rounded-md overflow-x-auto text-gray-900 dark:text-gray-100">
 {`{
+  // Required fields
+  "bot_id": "${bot.id}",
   "symbol": "${bot.pair}",
   "action": "BUY",  // or "SELL"
-  "price": {{close}},
-  "strategy": "Your Strategy Name",
-  "stoplossPercent": 2.5  // Optional
+
+  // Optional fields
+  "price": {{close}},        // Default: market price
+  "strategy": "MA Cross",    // Default: ""
+  "stoplossPercent": 2.5    // Default: none
 }`}
-              </pre>
-            </div>
+                    </pre>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      <p className="font-medium mb-1">Required Fields:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li><code className="text-gray-900 dark:text-gray-200">bot_id</code>: Your bot's unique identifier</li>
+                        <li><code className="text-gray-900 dark:text-gray-200">symbol</code>: Trading pair (e.g., BTC/USDT)</li>
+                        <li><code className="text-gray-900 dark:text-gray-200">action</code>: Must be either "BUY" or "SELL"</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
           </div>
         </div>
       </div>

@@ -4,9 +4,20 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/database/client'
 import { Button } from "@/components/ui/button"
-import type { Database } from '@/lib/database/schema'
 
-type Bot = Database['public']['Tables']['bots']['Row']
+type Bot = {
+  id: string
+  name: string
+  user_id: string
+  exchange: string
+  pair: string
+  max_position_size: number
+  stoploss_percentage: number | null
+  status: 'active' | 'paused' | 'stopped'
+  webhook_secret: string
+  created_at: string
+  updated_at: string
+}
 
 export default function BotsPage() {
   const [bots, setBots] = useState<Bot[]>([])
@@ -41,7 +52,7 @@ export default function BotsPage() {
       setError(null)
       const { error: toggleError } = await supabase
         .from('bots')
-        .update({ enabled: !bot.enabled })
+        .update({ status: bot.status === 'active' ? 'paused' : 'active' })
         .eq('id', bot.id)
 
       if (toggleError) throw toggleError
@@ -108,11 +119,13 @@ export default function BotsPage() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    bot.enabled 
+                    bot.status === 'active' 
                       ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
-                      : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                      : bot.status === 'paused' 
+                        ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                        : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
                   }`}>
-                    {bot.enabled ? 'Active' : 'Inactive'}
+                    {bot.status === 'active' ? 'Active' : bot.status === 'paused' ? 'Paused' : 'Stopped'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -121,11 +134,11 @@ export default function BotsPage() {
                       <Button variant="default" size="sm">View</Button>
                     </Link>
                     <Button 
-                      variant={bot.enabled ? "secondary" : "primary"}
+                      variant={bot.status === 'active' ? "secondary" : "primary"}
                       size="sm"
                       onClick={() => handleToggleBot(bot)}
                     >
-                      {bot.enabled ? 'Disable' : 'Enable'}
+                      {bot.status === 'active' ? 'Pause' : 'Activate'}
                     </Button>
                     <Button 
                       variant="destructive"

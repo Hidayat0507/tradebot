@@ -24,7 +24,7 @@ export async function GET() {
     
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', balance: {} },
         { status: 401 }
       );
     }
@@ -50,17 +50,17 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json(formattedBalance);
+    return NextResponse.json({ balance: formattedBalance });
   } catch (error) {
     console.error('Balance fetch error:', error);
     if (error instanceof Error) {
       return NextResponse.json(
-        { error: error.message },
+        { error: error.message, balance: {} },
         { status: error.name === 'ExchangeError' ? 400 : 500 }
       );
     }
     return NextResponse.json(
-      { error: 'An unexpected error occurred' },
+      { error: 'An unexpected error occurred', balance: {} },
       { status: 500 }
     );
   }

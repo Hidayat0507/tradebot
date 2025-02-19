@@ -27,7 +27,7 @@ export default function AccountBalance({ className }: AccountBalanceProps) {
           throw new Error(data.error || 'Failed to fetch balance')
         }
 
-        setBalances(data.balance)
+        setBalances(data.balance || {})
       } catch (err: any) {
         setError(err.message)
       } finally {
