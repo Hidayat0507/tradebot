@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --border: 214.3 31.8% 91.4%;
+  }
+
+  [data-theme="dark"] {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    --border: 217.2 32.6% 17.5%;
+  }
+}
+
+@layer base {
+  * {
+    /* Removed global border application */
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Page Layout */
+  .page-background {
+    @apply min-h-screen bg-gray-50 dark:bg-gray-900;
+  }
+
+  .page-container {
+    @apply container mx-auto px-4 py-8;
+  }
+
+  .page-content {
+    @apply max-w-2xl mx-auto;
+  }
+
+  /* Typography */
+  .page-title {
+    @apply text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
+  }
+
+  .page-subtitle {
+    @apply mt-2 text-gray-600 dark:text-gray-400;
+  }
+
+  .section-title {
+    @apply text-xl font-semibold mb-6 text-gray-900 dark:text-white flex items-center gap-2;
+  }
+
+  /* Buttons */
+  .button-group {
+    @apply flex justify-end space-x-4;
+  }
+
+  .button-cancel {
+    @apply px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors;
+  }
+
+  .button-submit {
+    @apply px-4 py-2 text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-shadow disabled:opacity-50;
+  }
+
+  /* Links */
+  .link {
+    @apply text-blue-500 hover:text-blue-600 transition-colors;
+  }
+}
