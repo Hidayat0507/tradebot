@@ -75,11 +75,8 @@ export default function BotsPage() {
 
   return (
     <div className="page-container">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="page-title">Trading Bots</h1>
-        <Link href="/bots/create">
-          <Button variant="primary" size="md">Create Bot</Button>
-        </Link>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-bold">Your Bots</h1>
       </div>
 
       {error && (

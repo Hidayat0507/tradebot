@@ -14,9 +14,22 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Trading Dashboard</h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Monitor your trading performance and manage your bots</p>
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Trading Dashboard</h1>
+              <p className="mt-2 text-gray-600 dark:text-gray-400">Monitor your trading performance and manage your bots</p>
+            </div>
+            <Link href="/bots/create">
+              <Button variant="gradient" size="lg" className="shadow-lg hover:shadow-xl transition-shadow">
+                <span className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Create Bot
+                </span>
+              </Button>
+            </Link>
           </div>
 
           <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
@@ -71,12 +84,6 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-
-          <div className="mt-6 flex justify-end">
-            <Button variant="gradient">
-              <Link href="/bots/create">Create Bot</Link>
-            </Button>
           </div>
         </div>
       </div>

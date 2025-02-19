@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/database/client'
 
+interface RequestContext {
+  params: {
+    id: string;
+  };
+  searchParams: { [key: string]: string | string[] | undefined };
+}
+
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RequestContext
 ) {
   try {
     const { data, error } = await supabase
       .from('bots')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', context.params.id)
       .single()
 
     if (error) throw error
@@ -32,7 +39,7 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RequestContext
 ) {
   try {
     const payload = await request.json()
@@ -42,7 +49,7 @@ export async function PATCH(
         ...payload,
         updated_at: new Date().toISOString()
       })
-      .eq('id', params.id)
+      .eq('id', context.params.id)
       .select()
       .single()
 
@@ -66,17 +73,20 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RequestContext
 ) {
   try {
     const { error } = await supabase
       .from('bots')
       .delete()
-      .eq('id', params.id)
+      .eq('id', context.params.id)
 
     if (error) throw error
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json(
+      { message: 'Bot deleted successfully' },
+      { status: 200 }
+    )
   } catch (error) {
     console.error('Error deleting bot:', error)
     return NextResponse.json(

@@ -72,9 +72,6 @@ export default function Navigation() {
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="gradient" size="sm">
-            <Link href="/bots/create">Create Bot</Link>
-          </Button>
           {user ? (
             <Button variant="default" size="sm" onClick={handleSignOut}>
               Sign Out
