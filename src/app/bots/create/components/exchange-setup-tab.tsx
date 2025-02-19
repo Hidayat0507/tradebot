@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from '@/lib/database/client'
 import type { SupportedExchange } from '@/types'
+import { useRouter } from 'next/navigation'
 
 interface ExchangeSetupTabProps {
   onValidated: (config: { exchange: SupportedExchange; apiKey: string; apiSecret: string }) => void
@@ -18,6 +19,7 @@ const SUPPORTED_EXCHANGES = [
 ] as const
 
 export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps) {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     exchange: 'binance' as SupportedExchange,
     apiKey: '',
@@ -30,10 +32,16 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
   useEffect(() => {
     async function loadExistingConfig() {
       try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) {
+          router.push('/auth')
+          return
+        }
+
         const { data, error } = await supabase
           .from('exchange_config')
           .select('exchange, api_key, api_secret')
-          .eq('user_id', 'default_user')
+          .eq('user_id', session.user.id)
           .maybeSingle()
 
         if (error) throw error
@@ -45,48 +53,58 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
             apiSecret: data.api_secret,
           })
         }
-        // If no data, we'll keep the default state
       } catch (err: any) {
         console.error('Failed to load exchange config:', err.message)
+        setError(err.message)
       } finally {
         setIsLoading(false)
       }
     }
 
     loadExistingConfig()
-  }, [])
+  }, [router])
 
   const handleValidate = async () => {
     setIsValidating(true)
     setError('')
 
     try {
-      // Test API connection with selected exchange
-      const response = await fetch('/api/exchange/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to validate exchange credentials')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        router.push('/auth')
+        return
       }
 
-      // Store validated credentials - update if exists, insert if not
+      // Store credentials first
       const { error: dbError } = await supabase
         .from('exchange_config')
         .upsert({
+          user_id: session.user.id,
           exchange: formData.exchange,
           api_key: formData.apiKey,
           api_secret: formData.apiSecret,
-          user_id: 'default_user',
         }, {
-          onConflict: 'user_id',  // Update based on user_id conflict
+          onConflict: 'user_id'
         })
 
       if (dbError) throw dbError
+
+      // Then validate them
+      const response = await fetch('/api/exchange/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: formData.apiKey,
+          apiSecret: formData.apiSecret,
+          exchange: formData.exchange
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to validate exchange credentials')
+      }
 
       // Notify parent component
       onValidated(formData)
@@ -97,11 +115,15 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
     }
   }
 
+  if (isLoading) {
+    return <div className="text-gray-700 dark:text-gray-300">Loading...</div>
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="exchange" className="text-lg text-gray-500 dark:text-gray-400">Exchange</Label>
+          <Label htmlFor="exchange" className="text-lg text-gray-700 dark:text-gray-300">Exchange</Label>
           <select
             id="exchange"
             value={formData.exchange}
@@ -109,7 +131,7 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
             className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"
           >
             {SUPPORTED_EXCHANGES.map(({ id, name }) => (
-              <option key={id} value={id}>
+              <option key={id} value={id} className="text-gray-700 dark:text-gray-300">
                 {name}
               </option>
             ))}
@@ -117,7 +139,7 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="apiKey" className="text-lg text-gray-500 dark:text-gray-400">API Key</Label>
+          <Label htmlFor="apiKey" className="text-lg text-gray-700 dark:text-gray-300">API Key</Label>
           <div className="relative">
             <Input
               id="apiKey"
@@ -125,13 +147,13 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
               value={formData.apiKey}
               onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
               placeholder="Enter your API key"
-              className="text-gray-700 dark:text-gray-300"
+              className="text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800"
             />
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="apiSecret" className="text-lg text-gray-500 dark:text-gray-400">API Secret</Label>
+          <Label htmlFor="apiSecret" className="text-lg text-gray-700 dark:text-gray-300">API Secret</Label>
           <div className="relative">
             <Input
               id="apiSecret"
@@ -139,7 +161,7 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
               value={formData.apiSecret}
               onChange={(e) => setFormData(prev => ({ ...prev, apiSecret: e.target.value }))}
               placeholder="Enter your API secret"
-              className="text-gray-700 dark:text-gray-300"
+              className="text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800"
             />
           </div>
         </div>

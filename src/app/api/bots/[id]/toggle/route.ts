@@ -3,14 +3,15 @@ import { supabase } from '@/lib/database/client'
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // First get the current bot state
     const { data: bot, error: fetchError } = await supabase
       .from('bots')
       .select('enabled')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (fetchError) throw fetchError
@@ -28,7 +29,7 @@ export async function POST(
         enabled: !bot.enabled,
         updated_at: new Date().toISOString()
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 

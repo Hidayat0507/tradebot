@@ -10,13 +10,14 @@ interface LogEntry {
 }
 
 class Logger {
-  private formatError(error: Error): Record<string, unknown> {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      ...(error as any).cause ? { cause: this.formatError((error as any).cause) } : {}
-    };
+  private formatError(error: Error): Error {
+    const formattedError = new Error(error.message);
+    formattedError.name = error.name;
+    formattedError.stack = error.stack;
+    if ((error as any).cause) {
+      (formattedError as any).cause = this.formatError((error as any).cause);
+    }
+    return formattedError;
   }
 
   private createLogEntry(
@@ -30,7 +31,7 @@ class Logger {
       level,
       message,
       context,
-      ...(error ? { error: this.formatError(error) } : {})
+      error: error ? this.formatError(error) : undefined
     };
   }
 

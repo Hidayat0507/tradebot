@@ -2,12 +2,31 @@
 
 import { login, signup } from './actions'
 import { useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 
-export default function AuthPage() {
+function SearchParamsContent() {
   const searchParams = useSearchParams()
   const errorMessage = searchParams.get('error')
   const successMessage = searchParams.get('message')
+
+  return (
+    <>
+      {errorMessage && (
+        <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
+          {errorMessage}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
+          {successMessage}
+        </div>
+      )}
+    </>
+  )
+}
+
+export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
 
   return (
@@ -17,17 +36,9 @@ export default function AuthPage() {
           Trading Bot
         </h1>
 
-        {errorMessage && (
-          <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
-            {errorMessage}
-          </div>
-        )}
-
-        {successMessage && (
-          <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
-            {successMessage}
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <SearchParamsContent />
+        </Suspense>
 
         <form action={isLogin ? login : signup} className="space-y-4">
           <div>

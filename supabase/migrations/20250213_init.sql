@@ -1,5 +1,5 @@
--- Create exchange_configs table
-CREATE TABLE IF NOT EXISTS public.exchange_configs (
+-- Create exchange_config table
+CREATE TABLE IF NOT EXISTS public.exchange_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL,
     exchange TEXT NOT NULL CHECK (exchange IN ('binance', 'coinbase', 'kraken')),
@@ -26,27 +26,29 @@ CREATE TABLE IF NOT EXISTS public.trades (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Create RLS policies
-ALTER TABLE public.exchange_configs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
+-- Enable RLS
+ALTER TABLE public.exchange_config ENABLE ROW LEVEL SECURITY;
 
--- Create policies for exchange_configs
-CREATE POLICY "Users can view their own exchange configs"
-    ON public.exchange_configs FOR SELECT
+-- Create policies
+CREATE POLICY "Users can view their own exchange config"
+    ON public.exchange_config FOR SELECT
     USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert their own exchange configs"
-    ON public.exchange_configs FOR INSERT
+CREATE POLICY "Users can insert their own exchange config"
+    ON public.exchange_config FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own exchange configs"
-    ON public.exchange_configs FOR UPDATE
+CREATE POLICY "Users can update their own exchange config"
+    ON public.exchange_config FOR UPDATE
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete their own exchange configs"
-    ON public.exchange_configs FOR DELETE
+CREATE POLICY "Users can delete their own exchange config"
+    ON public.exchange_config FOR DELETE
     USING (auth.uid() = user_id);
+
+-- Create RLS policies
+ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for trades
 CREATE POLICY "Users can view their own trades"
@@ -73,7 +75,7 @@ $$ LANGUAGE plpgsql;
 
 -- Create triggers
 CREATE TRIGGER set_updated_at
-    BEFORE UPDATE ON public.exchange_configs
+    BEFORE UPDATE ON public.exchange_config
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
 

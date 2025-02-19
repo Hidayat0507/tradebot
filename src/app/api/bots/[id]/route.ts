@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/database/client'
 
-interface RequestContext {
-  params: {
-    id: string;
-  };
-  searchParams: { [key: string]: string | string[] | undefined };
-}
-
+// GET /api/bots/[id] - Get a specific bot's details
 export async function GET(
   request: Request,
-  context: RequestContext
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const { data, error } = await supabase
       .from('bots')
       .select('*')
-      .eq('id', context.params.id)
+      .eq('id', id)
       .single()
 
     if (error) throw error
@@ -37,11 +32,13 @@ export async function GET(
   }
 }
 
+// PATCH /api/bots/[id] - Update a bot's settings
 export async function PATCH(
   request: Request,
-  context: RequestContext
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const payload = await request.json()
     const { data, error } = await supabase
       .from('bots')
@@ -49,7 +46,7 @@ export async function PATCH(
         ...payload,
         updated_at: new Date().toISOString()
       })
-      .eq('id', context.params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -71,15 +68,17 @@ export async function PATCH(
   }
 }
 
+// DELETE /api/bots/[id] - Delete a bot
 export async function DELETE(
   request: Request,
-  context: RequestContext
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const { error } = await supabase
       .from('bots')
       .delete()
-      .eq('id', context.params.id)
+      .eq('id', id)
 
     if (error) throw error
 

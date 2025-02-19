@@ -139,7 +139,7 @@ export async function verifyWebhookRequest(request: Request): Promise<any> {
     try {
       const data = JSON.parse(payload);
       const signal = validateSignal(data);
-      logger.webhookSuccess({ timestamp });
+      logger.info('Webhook processed successfully', { type: 'webhook', timestamp });
       return signal;
     } catch (error) {
       if (error instanceof SignalValidationError) {
