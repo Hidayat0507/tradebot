@@ -10,7 +10,7 @@ export class DatabaseError extends Error {
 }
 
 type TradeInsert = Database['public']['Tables']['trades']['Insert'];
-type ExchangeConfigInsert = Database['public']['Tables']['exchange_configs']['Insert'];
+type ExchangeConfigInsert = Database['public']['Tables']['exchange_config']['Insert'];
 
 export async function getTrades(userId: string): Promise<Trade[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -33,7 +33,7 @@ export async function getExchangeConfig(userId: string): Promise<ExchangeConfig>
   }
 
   const { data, error } = await supabase
-    .from('exchange_configs')
+    .from('exchange_config')
     .select('*')
     .eq('user_id', userId)
     .single();
@@ -56,14 +56,13 @@ export async function saveTrade(trade: Omit<Trade, 'id' | 'created_at' | 'update
   const tradeData: TradeInsert = {
     external_id: trade.external_id,
     user_id: trade.user_id,
+    bot_id: trade.bot_id,
     symbol: trade.symbol,
     side: trade.side,
-    entry_price: trade.entry_price,
-    quantity: trade.quantity,
+    price: trade.price,
+    size: trade.size,
     status: trade.status,
-    strategy: trade.strategy,
-    pnl: trade.pnl,
-    closed_at: trade.closed_at
+    pnl: trade.pnl
   };
 
   const { error } = await supabase
@@ -105,13 +104,11 @@ export async function saveExchangeConfig(
     user_id: config.user_id,
     exchange: config.exchange,
     api_key: config.api_key,
-    api_secret: config.api_secret,
-    max_position_size: config.max_position_size,
-    trading_enabled: config.trading_enabled
+    api_secret: config.api_secret
   };
 
   const { error } = await supabase
-    .from('exchange_configs')
+    .from('exchange_config')
     .upsert([configData]);
 
   if (error) throw new DatabaseError(`Failed to save exchange config: ${error.message}`);

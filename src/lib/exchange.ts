@@ -345,14 +345,13 @@ export async function executeTrade(signal: TradingViewSignal): Promise<Omit<Trad
     const trade: Omit<Trade, 'id' | 'created_at' | 'updated_at'> = {
       external_id: order.id,
       user_id: mockConfig.user_id,
+      bot_id: signal.bot_id,
       symbol: signal.symbol,
       side: signal.action as TradeSide,
-      entry_price: entryPrice,
-      quantity: orderSize,
+      price: entryPrice,
+      size: orderSize,
       status: 'OPEN' as TradeStatus,
-      strategy: signal.strategy || 'unknown',
-      pnl: null,
-      closed_at: null
+      pnl: null
     };
 
     return trade;

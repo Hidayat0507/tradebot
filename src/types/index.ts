@@ -4,7 +4,7 @@ import type { SupportedExchange, TradeSide, TradeStatus } from '@/lib/database/s
 // Re-export database types
 export type Bot = Database['public']['Tables']['bots']['Row']
 export type Trade = Database['public']['Tables']['trades']['Row']
-export type ExchangeConfig = Database['public']['Tables']['exchange_configs']['Row']
+export type ExchangeConfig = Database['public']['Tables']['exchange_config']['Row']
 
 // Re-export common types
 export type { SupportedExchange, TradeSide, TradeStatus }
