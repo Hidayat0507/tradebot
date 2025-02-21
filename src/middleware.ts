@@ -14,8 +14,12 @@ export const config = {
   ],
 }
 
+// Protected routes that require authentication
+const protectedRoutes = ['/bots', '/settings', '/dashboard']
+
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
+  const requestPath = request.nextUrl.pathname
 
   try {
     // Create a Supabase client configured to use cookies
@@ -55,22 +59,32 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Refresh session if expired
-    await supabase.auth.getSession()
-
-    // If no session and trying to access protected route, redirect to auth
+    // Try to get the session
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
-    if (!session && !request.nextUrl.pathname.startsWith('/auth')) {
+    // Check if route requires auth
+    const isProtectedRoute = protectedRoutes.some(route => requestPath.startsWith(route))
+    const isAuthPage = requestPath.startsWith('/auth')
+
+    // If no session and trying to access protected route, redirect to auth
+    if (!session && isProtectedRoute) {
       return NextResponse.redirect(new URL('/auth', request.url))
+    }
+
+    // If has session and on auth page, redirect to dashboard
+    if (session && isAuthPage) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
 
     return response
   } catch (e) {
+    // On error, redirect to auth for protected routes
     console.error('Auth middleware error:', e)
-    // On error, just proceed to the page
+    if (protectedRoutes.some(route => requestPath.startsWith(route))) {
+      return NextResponse.redirect(new URL('/auth', request.url))
+    }
     return response
   }
 }
