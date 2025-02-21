@@ -1,15 +1,18 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 
-export async function login(formData: FormData) {
+type AuthResponse = 
+  | { error: string; success?: never; message?: never }
+  | { success: true; error?: never; message?: string }
+
+export async function login(formData: FormData): Promise<AuthResponse> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
   if (!email || !password) {
-    return redirect('/auth?error=Please provide both email and password')
+    return { error: 'Please provide both email and password' }
   }
 
   const supabase = await createClient()
@@ -20,18 +23,18 @@ export async function login(formData: FormData) {
   })
 
   if (error) {
-    return redirect('/auth?error=' + error.message)
+    return { error: error.message }
   }
 
-  return redirect('/dashboard')
+  return { success: true }
 }
 
-export async function signup(formData: FormData) {
+export async function signup(formData: FormData): Promise<AuthResponse> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
   if (!email || !password) {
-    return redirect('/auth?error=Please provide both email and password')
+    return { error: 'Please provide both email and password' }
   }
 
   // Get the site URL from headers as fallback
@@ -51,8 +54,8 @@ export async function signup(formData: FormData) {
   })
 
   if (error) {
-    return redirect('/auth?error=' + error.message)
+    return { error: error.message }
   }
 
-  return redirect('/auth?message=Check your email to continue sign in process')
+  return { success: true, message: 'Check your email for the confirmation link.' }
 }

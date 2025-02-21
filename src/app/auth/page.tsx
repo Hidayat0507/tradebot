@@ -1,33 +1,35 @@
 'use client'
 
 import { login, signup } from './actions'
-import { useSearchParams } from 'next/navigation'
-import { useState, Suspense } from 'react'
-
-function SearchParamsContent() {
-  const searchParams = useSearchParams()
-  const errorMessage = searchParams.get('error')
-  const successMessage = searchParams.get('message')
-
-  return (
-    <>
-      {errorMessage && (
-        <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
-          {errorMessage}
-        </div>
-      )}
-
-      {successMessage && (
-        <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
-          {successMessage}
-        </div>
-      )}
-    </>
-  )
-}
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const router = useRouter()
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setError(null)
+    setMessage(null)
+
+    const formData = new FormData(e.currentTarget)
+    const result = await (isLogin ? login(formData) : signup(formData))
+
+    if (result.error) {
+      setError(result.error)
+    } else if (result.success) {
+      if (result.message) {
+        setMessage(result.message)
+      }
+      if (isLogin) {
+        router.push('/dashboard')
+        router.refresh()
+      }
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center py-2 bg-gray-100 dark:bg-gray-900">
@@ -36,11 +38,19 @@ export default function AuthPage() {
           Trading Bot
         </h1>
 
-        <Suspense fallback={null}>
-          <SearchParamsContent />
-        </Suspense>
+        {error && (
+          <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
+            {error}
+          </div>
+        )}
 
-        <form action={isLogin ? login : signup} className="space-y-4">
+        {message && (
+          <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
+            {message}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
               Email
@@ -50,7 +60,7 @@ export default function AuthPage() {
               name="email"
               type="email"
               required
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600"
+              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
             />
           </div>
 
@@ -63,13 +73,13 @@ export default function AuthPage() {
               name="password"
               type="password"
               required
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600"
+              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             {isLogin ? 'Sign In' : 'Sign Up'}
           </button>
@@ -78,9 +88,9 @@ export default function AuthPage() {
         <div className="mt-4 text-center">
           <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400"
+            className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
           >
-            {isLogin ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
+            {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
           </button>
         </div>
       </div>

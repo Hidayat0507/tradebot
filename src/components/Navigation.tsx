@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from "@/components/ui/button"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
+import { User } from '@supabase/supabase-js'
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
   const pathname = usePathname()
@@ -31,26 +32,36 @@ const NavLink = ({ href, children }: { href: string; children: React.ReactNode }
 }
 
 export default function Navigation() {
-  const supabase = createClientComponentClient()
-  const [user, setUser] = useState<any>(null)
+  const supabase = createClient()
+  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+    // Get initial user state
+    supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user)
-    }
-
-    getUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
     })
 
-    return () => subscription.unsubscribe()
-  }, [supabase.auth])
+    // Set up auth state listener
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        router.refresh()
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [router])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut()
+    if (!error) {
+      router.push('/auth')
+    }
   }
 
   return (
@@ -77,7 +88,7 @@ export default function Navigation() {
               Sign Out
             </Button>
           ) : (
-            <Button variant="default" size="sm">
+            <Button variant="default" size="sm" asChild>
               <Link href="/auth">Sign In</Link>
             </Button>
           )}
