@@ -6,6 +6,7 @@ import { supabase } from '@/lib/database/client'
 import { generateSecureSecret } from '@/lib/crypto'
 import type { Database } from '@/lib/database/schema'
 import AccountBalance from './account-balance'
+import { Button } from '@/components/ui/button'
 
 const TRADING_PAIRS = [
   // Major Cryptocurrencies
@@ -165,20 +166,29 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
           </div>
         </div>
 
-        <div className="flex justify-end space-x-4">
-          <button
+        <div className="flex justify-end space-x-4 mt-8">
+          <Button
+            variant="secondary"
             onClick={() => router.push('/bots')}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            size="lg"
+            className="w-[120px] font-semibold"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="gradient"
             onClick={handleSubmit}
             disabled={isCreating || !formData.name || !formData.pair}
-            className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            size="lg"
+            className="w-[120px] font-semibold"
           >
-            {isCreating ? 'Creating...' : 'Create Bot'}
-          </button>
+            <span className={isCreating ? 'invisible' : 'visible'}>Create Bot</span>
+            {isCreating && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-white"></div>
+              </div>
+            )}
+          </Button>
         </div>
       </div>
 

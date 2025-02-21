@@ -6,6 +6,7 @@ import ExchangeSetupTab from '@/app/bots/create/components/exchange-setup-tab'
 import BotSetupTab from '@/app/bots/create/components/bot-setup-tab'
 import ApiDocumentation from '@/app/bots/create/components/api-documentation'
 import SessionProvider from '@/components/session-provider'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function CreateBotPage() {
   const [activeTab, setActiveTab] = useState('exchange')
@@ -34,39 +35,30 @@ export default function CreateBotPage() {
 
             <div className="container mx-auto py-8">
               <Card className="p-6">
-                <div className="mb-6">
-                  <div className="grid w-full grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setActiveTab('exchange')}
-                      className={`py-2.5 text-center rounded-lg transition-colors font-medium ${
-                        activeTab === 'exchange'
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger 
+                      value="exchange" 
+                      className="text-base"
+                      disabled={false}
                     >
                       Step 1: Exchange Setup
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('bot')}
-                      className={`py-2.5 text-center rounded-lg transition-colors font-medium ${
-                        activeTab === 'bot'
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="bot" 
+                      className="text-base"
+                      disabled={!isExchangeValidated}
                     >
                       Step 2: Bot Configuration
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  {activeTab === 'exchange' && (
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="exchange" className="mt-6">
                     <ExchangeSetupTab onValidated={handleExchangeValidated} />
-                  )}
-                  {activeTab === 'bot' && (
+                  </TabsContent>
+                  <TabsContent value="bot" className="mt-6">
                     <BotSetupTab exchangeConfig={exchangeConfig} />
-                  )}
-                </div>
+                  </TabsContent>
+                </Tabs>
               </Card>
 
               {activeTab === 'bot' && (
