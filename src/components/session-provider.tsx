@@ -40,6 +40,7 @@ export default function SessionProvider({
 
       // Force router refresh to update all components
       if (event === 'SIGNED_IN') {
+        router.push('/dashboard')
         router.refresh()
       } else if (event === 'SIGNED_OUT') {
         router.push('/auth')

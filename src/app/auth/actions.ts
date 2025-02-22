@@ -1,6 +1,6 @@
-'use server'
+'use client'
 
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/client'
 import { headers } from 'next/headers'
 
 type AuthResponse = 
@@ -15,7 +15,7 @@ export async function login(formData: FormData): Promise<AuthResponse> {
     return { error: 'Please provide both email and password' }
   }
 
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -37,19 +37,13 @@ export async function signup(formData: FormData): Promise<AuthResponse> {
     return { error: 'Please provide both email and password' }
   }
 
-  // Get the site URL from headers as fallback
-  const headersList = await headers()
-  const host = headersList.get('host') || ''
-  const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || `${proto}://${host}`
-
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${siteUrl}/auth/callback`,
+      emailRedirectTo: `${window.location.origin}/auth/confirm`,
     },
   })
 
@@ -57,5 +51,8 @@ export async function signup(formData: FormData): Promise<AuthResponse> {
     return { error: error.message }
   }
 
-  return { success: true, message: 'Check your email for the confirmation link.' }
+  return { 
+    success: true,
+    message: 'Check your email for the confirmation link.'
+  }
 }

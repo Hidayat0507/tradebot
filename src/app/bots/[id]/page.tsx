@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from "next/navigation"
-import { supabase } from '@/lib/database/client'
+import { createClient } from '@/lib/database/client'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
@@ -35,6 +35,7 @@ export default function BotDetailsPage() {
   async function loadBot() {
     try {
       setError(null)
+      const supabase = createClient()
       const { data, error: loadError } = await supabase
         .from('bots')
         .select('*')

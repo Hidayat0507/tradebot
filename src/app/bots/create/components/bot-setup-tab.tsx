@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/database/client'
+import { createClient } from '@/lib/database/client'
 import { generateSecureSecret } from '@/lib/crypto'
 import type { Database } from '@/lib/database/schema'
 import { botFormSchema, type BotFormValues } from '@/lib/validations/bot'
@@ -71,19 +71,20 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
     },
   })
 
-  async function onSubmit(data: BotFormValues) {
+  const onSubmit = async (values: BotFormValues) => {
     try {
+      const supabase = createClient()
       const webhookSecret = generateSecureSecret()
       
       const { error } = await supabase
         .from('bots')
         .insert({
-          name: data.name,
+          name: values.name,
           exchange: exchangeConfig.exchange,
-          pair: data.pair,
-          max_position_size: data.maxPositionSize,
-          stoploss_percentage: data.stoplossPercentage,
-          status: data.status,
+          pair: values.pair,
+          max_position_size: values.maxPositionSize,
+          stoploss_percentage: values.stoplossPercentage,
+          status: values.status,
           webhook_secret: webhookSecret,
           api_key: exchangeConfig.apiKey,
           api_secret: exchangeConfig.apiSecret,

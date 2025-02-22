@@ -1,21 +1,61 @@
 'use client'
 
 import { login, signup } from './actions'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+
+const formSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+})
+
+type FormValues = z.infer<typeof formSchema>
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  // Check for error in URL
+  useEffect(() => {
+    const urlError = searchParams.get('error')
+    if (urlError) {
+      setError(urlError)
+    }
+  }, [searchParams])
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  })
+
+  const onSubmit = async (data: FormValues) => {
     setError(null)
     setMessage(null)
 
-    const formData = new FormData(e.currentTarget)
+    const formData = new FormData()
+    formData.append('email', data.email)
+    formData.append('password', data.password)
+
     const result = await (isLogin ? login(formData) : signup(formData))
 
     if (result.error) {
@@ -32,68 +72,80 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center py-2 bg-gray-100 dark:bg-gray-900">
-      <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md dark:bg-gray-800">
-        <h1 className="text-2xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          Trading Bot
-        </h1>
+    <div className="flex min-h-screen flex-col items-center justify-center py-2">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-center bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Trading Bot
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
-            {error}
+          {message && (
+            <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
+              {message}
+            </div>
+          )}
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter your email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder="Enter your password" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                {isLogin ? 'Sign In' : 'Sign Up'}
+              </Button>
+            </form>
+          </Form>
+
+          <div className="mt-4 text-center">
+            <Button
+              variant="link"
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-blue-600 hover:text-blue-500"
+            >
+              {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
+            </Button>
           </div>
-        )}
-
-        {message && (
-          <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            {isLogin ? 'Sign In' : 'Sign Up'}
-          </button>
-        </form>
-
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
-          </button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

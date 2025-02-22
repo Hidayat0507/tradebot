@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/database/client'
+import { createClient } from '@/lib/database/client'
 import { Button } from "@/components/ui/button"
 
 type Bot = {
@@ -32,6 +32,7 @@ export default function BotsPage() {
   async function loadBots() {
     try {
       setError(null)
+      const supabase = createClient()
       const { data, error: loadError } = await supabase
         .from('bots')
         .select('*')
@@ -50,6 +51,7 @@ export default function BotsPage() {
   async function handleToggleBot(bot: Bot) {
     try {
       setError(null)
+      const supabase = createClient()
       const { error: toggleError } = await supabase
         .from('bots')
         .update({ status: bot.status === 'active' ? 'paused' : 'active' })
@@ -66,6 +68,7 @@ export default function BotsPage() {
   async function handleDeleteBot(botId: string) {
     try {
       setError(null)
+      const supabase = createClient()
       const { error: deleteError } = await supabase
         .from('bots')
         .delete()

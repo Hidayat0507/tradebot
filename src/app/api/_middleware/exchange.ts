@@ -27,19 +27,11 @@ export async function createExchangeClient(userId: string): Promise<ccxt.binance
   }
   
   if (!config) {
-    throw new ExchangeError(
-      'No API credentials found',
-      404,
-      'Please configure your exchange API credentials in the settings page'
-    );
+    throw new ExchangeError('No API credentials found', 404);
   }
 
   if (!config.api_key || !config.api_secret) {
-    throw new ExchangeError(
-      'Invalid API credentials',
-      400,
-      'Please check your exchange API credentials in the settings page'
-    );
+    throw new ExchangeError('Invalid API credentials', 400);
   }
 
   // Initialize Binance client

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from '@/lib/database/client'
+import { createClient } from '@/lib/database/client'
 import type { SupportedExchange } from '@/types'
 import { useRouter } from 'next/navigation'
 
@@ -32,6 +32,7 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
   useEffect(() => {
     async function loadExistingConfig() {
       try {
+        const supabase = createClient()
         const { data: { session } } = await supabase.auth.getSession()
         if (!session?.user) {
           router.push('/auth')
@@ -69,6 +70,7 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
     setError('')
 
     try {
+      const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) {
         router.push('/auth')
