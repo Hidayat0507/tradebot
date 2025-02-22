@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from "next/navigation"
-import { createClient } from '@/lib/database/client'
+import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
@@ -21,38 +21,37 @@ type Bot = {
 }
 
 export default function BotDetailsPage() {
+  const params = useParams<{ id: string }>()
   const router = useRouter()
-  const params = useParams()
   const [bot, setBot] = useState<Bot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [webhookUrlCopied, setWebhookUrlCopied] = useState(false)
+  const supabase = createClient()
 
   useEffect(() => {
-    loadBot()
-  }, [])
+    const loadBot = async () => {
+      try {
+        setError(null)
+        const { data, error: loadError } = await supabase
+          .from('bots')
+          .select('*')
+          .eq('id', params.id)
+          .single()
 
-  async function loadBot() {
-    try {
-      setError(null)
-      const supabase = createClient()
-      const { data, error: loadError } = await supabase
-        .from('bots')
-        .select('*')
-        .eq('id', params.id)
-        .single()
-
-      if (loadError) throw loadError
-      if (!data) throw new Error('Bot not found')
-      
-      setBot(data)
-    } catch (err: any) {
-      console.error('Error loading bot:', err)
-      setError(err.message)
-    } finally {
-      setLoading(false)
+        if (loadError) throw loadError
+        if (!data) throw new Error('Bot not found')
+        
+        setBot(data)
+      } catch (err: any) {
+        console.error('Error loading bot:', err)
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
+    loadBot()
+  }, [params.id, supabase])
 
   async function copyToClipboard(text: string, setCopied: (copied: boolean) => void) {
     try {

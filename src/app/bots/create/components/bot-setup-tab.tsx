@@ -3,20 +3,14 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/database/client'
+import { useState } from 'react'
+import { createClient } from '@/utils/supabase/client'
 import { generateSecureSecret } from '@/lib/crypto'
 import type { Database } from '@/lib/database/schema'
 import { botFormSchema, type BotFormValues } from '@/lib/validations/bot'
 import AccountBalance from './account-balance'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Form,
   FormControl,
@@ -26,6 +20,15 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Alert as AlertComponent } from '@/components/ui/alert'
 
 const TRADING_PAIRS = [
   // Major Cryptocurrencies
@@ -60,6 +63,10 @@ interface BotSetupTabProps {
 
 export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
   const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const supabase = createClient()
+
   const form = useForm<BotFormValues>({
     resolver: zodResolver(botFormSchema),
     defaultValues: {
@@ -71,40 +78,57 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
     },
   })
 
-  const onSubmit = async (values: BotFormValues) => {
+  async function onSubmit(data: BotFormValues) {
     try {
-      const supabase = createClient()
+      setError(null)
+      setSuccess(null)
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
       const webhookSecret = generateSecureSecret()
-      
-      const { error } = await supabase
+
+      const { error: insertError } = await supabase
         .from('bots')
         .insert({
-          name: values.name,
+          name: data.name,
           exchange: exchangeConfig.exchange,
-          pair: values.pair,
-          max_position_size: values.maxPositionSize,
-          stoploss_percentage: values.stoplossPercentage,
-          status: values.status,
+          pair: data.pair,
+          max_position_size: data.maxPositionSize,
+          stoploss_percentage: data.stoplossPercentage,
+          status: data.status,
           webhook_secret: webhookSecret,
           api_key: exchangeConfig.apiKey,
           api_secret: exchangeConfig.apiSecret,
         })
+        .select()
+        .single()
 
-      if (error) throw error
+      if (insertError) throw insertError
 
+      setSuccess('Bot created successfully')
       router.push('/bots')
-    } catch (error) {
-      console.error('Error creating bot:', error)
-      form.setError('root', {
-        type: 'server',
-        message: 'Failed to create bot. Please try again.',
-      })
+    } catch (err) {
+      console.error('Error creating bot:', err)
+      setError('Failed to create bot')
     }
   }
 
   return (
     <div className="space-y-8">
       <AccountBalance className="mb-6" />
+
+      {error && (
+        <AlertComponent variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </AlertComponent>
+      )}
+
+      {success && (
+        <AlertComponent className="bg-green-50 text-green-700 border-green-200">
+          <AlertDescription>{success}</AlertDescription>
+        </AlertComponent>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -208,8 +232,8 @@ export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
             >
               Cancel
             </Button>
-            <Button type="submit">
-              Create Bot
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting ? 'Creating...' : 'Create Bot'}
             </Button>
           </div>
         </form>

@@ -39,9 +39,14 @@ export async function middleware(request: NextRequest) {
 
   // Check auth for protected routes
   if (protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route))) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.redirect(new URL('/auth', request.url))
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    // Try to refresh the session if no active session
+    if (!session) {
+      const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
+      if (!refreshedSession) {
+        return NextResponse.redirect(new URL('/auth', request.url))
+      }
     }
   }
 

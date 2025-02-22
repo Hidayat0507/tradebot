@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const profileFormSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters'),
@@ -131,19 +132,14 @@ export default function ProfilePage() {
         </div>
 
         {message && (
-          <div className={cn(
-            "flex items-center gap-3 p-4 rounded-lg border text-sm",
-            message.type === 'success' 
-              ? "bg-green-50 dark:bg-green-950/50 border-green-200 dark:border-green-900 text-green-700 dark:text-green-300"
-              : "bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300"
-          )}>
-            {message.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-            )}
-            <p>{message.text}</p>
-          </div>
+          <Alert 
+            className={message.type === 'success' 
+              ? 'bg-green-50 text-green-700 border-green-200' 
+              : 'bg-destructive text-destructive-foreground'
+            }
+          >
+            <AlertDescription>{message.text}</AlertDescription>
+          </Alert>
         )}
 
         <Tabs defaultValue="profile" className="space-y-6">

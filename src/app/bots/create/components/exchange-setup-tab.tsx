@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { createClient } from '@/lib/database/client'
+import { createClient } from '@/utils/supabase/client'
 import type { SupportedExchange } from '@/types'
 import { exchangeFormSchema, type ExchangeFormValues } from '@/lib/validations/exchange'
 
@@ -40,6 +40,9 @@ const SUPPORTED_EXCHANGES = [
 export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps) {
   const router = useRouter()
   const [isValidated, setIsValidated] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const supabase = createClient()
   const form = useForm<ExchangeFormValues>({
     resolver: zodResolver(exchangeFormSchema),
     defaultValues: {
@@ -52,27 +55,20 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
   useEffect(() => {
     async function loadExistingConfig() {
       try {
-        const supabase = createClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.user) {
-          router.push('/auth')
+        const { data, error } = await supabase
+          .from('exchange_config')
+          .select('*')
+          .single()
+
+        if (error) {
+          console.error('Error loading config:', error)
           return
         }
 
-        const { data, error } = await supabase
-          .from('exchange_config')
-          .select('exchange, api_key, api_secret')
-          .eq('user_id', session.user.id)
-          .maybeSingle()
-
-        if (error) throw error
-
         if (data) {
-          form.reset({
-            exchange: data.exchange as SupportedExchange,
-            apiKey: data.api_key,
-            apiSecret: data.api_secret,
-          })
+          form.setValue('exchange', data.exchange)
+          form.setValue('apiKey', data.api_key)
+          form.setValue('apiSecret', data.api_secret)
         }
       } catch (error) {
         console.error('Failed to load exchange config:', error)
@@ -82,15 +78,10 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
     loadExistingConfig()
   }, [router])
 
-  async function onSubmit(values: ExchangeFormValues) {
+  async function onSubmit(data: ExchangeFormValues) {
     try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.user) {
-        router.push('/auth')
-        return
-      }
+      setError(null)
+      setSuccess(null)
 
       // Validate API credentials
       const response = await fetch('/api/exchange/validate', {
@@ -99,9 +90,9 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          exchange: values.exchange,
-          apiKey: values.apiKey,
-          apiSecret: values.apiSecret,
+          exchange: data.exchange,
+          apiKey: data.apiKey,
+          apiSecret: data.apiSecret,
         }),
       })
 
@@ -115,22 +106,18 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
       const { error: dbError } = await supabase
         .from('exchange_config')
         .upsert({
-          user_id: session.user.id,
-          exchange: values.exchange,
-          api_key: values.apiKey,
-          api_secret: values.apiSecret,
+          exchange: data.exchange,
+          api_key: data.apiKey,
+          api_secret: data.apiSecret,
         })
 
       if (dbError) throw dbError
 
       setIsValidated(true)
-      onValidated(values)
+      onValidated(data)
     } catch (error) {
       console.error('Failed to save exchange config:', error)
-      form.setError('root', {
-        type: 'manual',
-        message: error instanceof Error ? error.message : 'Failed to save exchange configuration',
-      })
+      setError(error instanceof Error ? error.message : 'Failed to save exchange configuration')
     }
   }
 
@@ -202,10 +189,18 @@ export default function ExchangeSetupTab({ onValidated }: ExchangeSetupTabProps)
           )}
         />
 
-        {form.formState.errors.root && (
+        {error && (
           <Alert variant="destructive">
             <AlertDescription>
-              {form.formState.errors.root.message}
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert className="bg-green-50 text-green-700 border-green-200">
+            <AlertDescription>
+              {success}
             </AlertDescription>
           </Alert>
         )}

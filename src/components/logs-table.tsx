@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, RefreshCcw } from 'lucide-react'
+import { cn } from "@/lib/utils"
 
 export type LogEntry = {
   id: string
@@ -81,8 +82,8 @@ export default function LogsTable({ logs, isLoading, onRefresh }: LogsTableProps
           </SelectContent>
         </Select>
         <Button
-          variant="outline"
-          size="icon"
+          variant="default"
+          size="sm"
           onClick={onRefresh}
           disabled={isLoading}
           className="h-10 w-10"

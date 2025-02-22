@@ -91,8 +91,7 @@ const FormLabel = React.forwardRef<
   const { error, formItemId } = useFormField()
 
   return (
-    <Label
-      ref={ref}
+    <LabelPrimitive.Root
       className={cn(error && "text-red-500 dark:text-red-400", className)}
       htmlFor={formItemId}
       {...props}

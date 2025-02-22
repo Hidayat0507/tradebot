@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from "@/components/ui/card"
+import { createClient } from '@/utils/supabase/client'
 import ExchangeSetupTab from '@/app/bots/create/components/exchange-setup-tab'
 import BotSetupTab from '@/app/bots/create/components/bot-setup-tab'
 import ApiDocumentation from '@/app/bots/create/components/api-documentation'
@@ -15,6 +16,18 @@ export default function CreateBotPage() {
     apiKey: '',
     apiSecret: '',
   })
+  const supabase = createClient()
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        // Let middleware handle the redirect
+        return
+      }
+    }
+    checkUser()
+  }, [])
 
   const handleExchangeValidated = (config: typeof exchangeConfig) => {
     setExchangeConfig(config)
