@@ -1,4 +1,8 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from "next/link"
+import { createClient } from '@/utils/supabase/client'
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { Button } from "@/components/ui/button"
 import {
@@ -8,8 +12,65 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import LogsTable, { type LogEntry } from '@/components/logs-table'
 
 export default function DashboardPage() {
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const supabase = createClient()
+
+  const fetchLogs = async () => {
+    setIsLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('No user found')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('logs')
+        .select(`
+          id,
+          bot_id,
+          bots (
+            name
+          ),
+          timestamp,
+          type,
+          message,
+          details
+        `)
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: false })
+        .limit(100)
+
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+
+      setLogs((data || []).map(log => ({
+        id: log.id,
+        botId: log.bot_id,
+        botName: log.bots ? log.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot',
+        timestamp: log.timestamp,
+        type: log.type,
+        message: log.message,
+        details: log.details
+      })))
+    } catch (error: any) {
+      console.error('Error fetching logs:', error.message || error)
+      setLogs([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchLogs()
+  }, [])
+
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
@@ -82,6 +143,27 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-center h-32 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                   <p className="text-sm text-gray-800 dark:text-gray-200">No recent trades</p>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-8">
+            <Card className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-xl rounded-xl shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  Activity Logs
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-400">Recent bot activities and trading operations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <LogsTable
+                  logs={logs}
+                  isLoading={isLoading}
+                  onRefresh={fetchLogs}
+                />
               </CardContent>
             </Card>
           </div>

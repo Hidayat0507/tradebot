@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -81,15 +82,15 @@ export default function AuthPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-4 text-sm text-red-800 bg-red-100 rounded-lg dark:bg-red-800/20 dark:text-red-400" role="alert">
-              {error}
-            </div>
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
           {message && (
-            <div className="mb-4 p-4 text-sm text-green-800 bg-green-100 rounded-lg dark:bg-green-800/20 dark:text-green-400" role="alert">
-              {message}
-            </div>
+            <Alert className="mb-4 bg-green-50 text-green-700 border-green-200">
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
           )}
 
           <Form {...form}>

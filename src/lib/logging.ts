@@ -18,49 +18,85 @@ const colors = {
   debug: 'gray'
 };
 
+import { createClient } from '@/utils/supabase/client'
+
 // Simple logger implementation
 export const logger = {
-  info: (message: string, meta?: any) => {
+  info: async (message: string, meta?: any) => {
     console.log(`[INFO] ${message}`, meta || '');
+    await saveLog('info', message, meta);
   },
-  error: (message: string, error?: any, meta?: any) => {
+  error: async (message: string, error?: any, meta?: any) => {
     console.error(`[ERROR] ${message}`, error || '', meta || '');
+    await saveLog('error', message, { ...meta, error });
   },
-  warn: (message: string, meta?: any) => {
+  warn: async (message: string, meta?: any) => {
     console.warn(`[WARN] ${message}`, meta || '');
+    await saveLog('warning', message, meta);
   },
-  debug: (message: string, meta?: any) => {
+  debug: async (message: string, meta?: any) => {
     console.debug(`[DEBUG] ${message}`, meta || '');
+    await saveLog('info', message, meta);
   },
-  tradingError: (message: string, error?: any, meta?: any) => {
+  tradingError: async (message: string, error?: any, meta?: any) => {
     console.error(`[TRADING_ERROR] ${message}`, error || '', meta || '');
+    await saveLog('error', message, { ...meta, error, type: 'trading' });
   },
-  webhookError: (error: Error, meta?: any) => {
+  webhookError: async (error: Error, meta?: any) => {
     console.error(`[WEBHOOK_ERROR] ${error.message}`, {
       name: error.name,
       stack: error.stack,
       ...meta
     });
+    await saveLog('error', error.message, { ...meta, error, type: 'webhook' });
   }
 };
 
+// Helper function to save log to database
+async function saveLog(
+  type: 'info' | 'warning' | 'error' | 'success',
+  message: string,
+  details?: any
+) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    await supabase.from('logs').insert({
+      user_id: user.id,
+      bot_id: details?.botId,
+      type,
+      message,
+      details,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Failed to save log:', error)
+  }
+}
+
 // Helper methods for common logging patterns
-export const logTrade = (action: string, details: any) => {
-  logger.info(`${action.toUpperCase()}`, {
+export const logTrade = async (action: string, details: any) => {
+  const message = `Trade ${action.toUpperCase()}`
+  await logger.info(message, {
     ...details,
+    type: 'trade',
     timestamp: new Date().toISOString()
   });
 };
 
-export const logBalance = (action: string, details: any) => {
-  logger.info(`${action.toUpperCase()}`, {
+export const logBalance = async (action: string, details: any) => {
+  const message = `Balance ${action.toUpperCase()}`
+  await logger.info(message, {
     ...details,
+    type: 'balance',
     timestamp: new Date().toISOString()
   });
 };
 
-export const logError = (error: Error, context?: any) => {
-  logger.error(error.message, error, {
+export const logError = async (error: Error, context?: any) => {
+  await logger.error(error.message, error, {
     ...context,
     timestamp: new Date().toISOString()
   });

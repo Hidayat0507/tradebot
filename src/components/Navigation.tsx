@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
+import ProfileMenu from './profile-menu'
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
   const pathname = usePathname()
@@ -64,6 +65,11 @@ export default function Navigation() {
     }
   }
 
+  const navigation = [
+    { name: 'Dashboard', href: '/dashboard' },
+    { name: 'Bots', href: '/bots' },
+  ]
+
   return (
     <nav className="sticky top-0 z-40 w-full border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between px-4">
@@ -83,9 +89,7 @@ export default function Navigation() {
 
         <div className="flex items-center gap-4">
           {user ? (
-            <Button variant="default" size="sm" onClick={handleSignOut}>
-              Sign Out
-            </Button>
+            <ProfileMenu user={user} />
           ) : (
             <Button variant="default" size="sm" asChild>
               <Link href="/auth">Sign In</Link>
