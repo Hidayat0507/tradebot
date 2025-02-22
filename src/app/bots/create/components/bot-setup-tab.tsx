@@ -1,12 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/database/client'
 import { generateSecureSecret } from '@/lib/crypto'
 import type { Database } from '@/lib/database/schema'
+import { botFormSchema, type BotFormValues } from '@/lib/validations/bot'
 import AccountBalance from './account-balance'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
 
 const TRADING_PAIRS = [
   // Major Cryptocurrencies
@@ -29,26 +48,11 @@ const TRADING_PAIRS = [
   'AAVE/USDT',
   'CAKE/USDT',
   'COMP/USDT',
-  'MKR/USDT',
-  // Exchange Tokens
-  'CRO/USDT',
-  'FTT/USDT',
-  'LEO/USDT',
-  'HT/USDT',
-  'KCS/USDT',
-]
-
-function filterTradingPairs(search: string) {
-  const searchLower = search.toLowerCase()
-  return TRADING_PAIRS.filter(pair =>
-    pair.toLowerCase().includes(searchLower)
-  )
-}
-
-type Bot = Database['public']['Tables']['bots']['Insert']
+] as const
 
 interface BotSetupTabProps {
   exchangeConfig: {
+    exchange: string
     apiKey: string
     apiSecret: string
   }
@@ -56,145 +60,159 @@ interface BotSetupTabProps {
 
 export default function BotSetupTab({ exchangeConfig }: BotSetupTabProps) {
   const router = useRouter()
-  const [formData, setFormData] = useState<{ name: string; pair: string }>({
-    name: '',
-    pair: TRADING_PAIRS[0],
+  const form = useForm<BotFormValues>({
+    resolver: zodResolver(botFormSchema),
+    defaultValues: {
+      name: '',
+      pair: 'BTC/USDT',
+      maxPositionSize: 0.01,
+      stoplossPercentage: 1,
+      status: 'paused',
+    },
   })
-  const [pairSearch, setPairSearch] = useState<string>('')
-  const [selectedPair, setSelectedPair] = useState('')
-  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [error, setError] = useState('')
 
-  const filteredPairs = filterTradingPairs(pairSearch)
-  const showDropdown = isSearchFocused || pairSearch.length > 0
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.name || !formData.pair) return
-
-    setIsCreating(true)
-    setError('')
-
+  async function onSubmit(data: BotFormValues) {
     try {
-      const botSecret = await generateSecureSecret()
-
-      // Get current user
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) {
-        throw new Error('Not authenticated')
-      }
-
-      const { error: createError } = await supabase
+      const webhookSecret = generateSecureSecret()
+      
+      const { error } = await supabase
         .from('bots')
         .insert({
-          name: formData.name,
-          pair: formData.pair,
-          secret: botSecret,
-          user_id: user.id,
-          status: 'active'
+          name: data.name,
+          exchange: exchangeConfig.exchange,
+          pair: data.pair,
+          max_position_size: data.maxPositionSize,
+          stoploss_percentage: data.stoplossPercentage,
+          status: data.status,
+          webhook_secret: webhookSecret,
+          api_key: exchangeConfig.apiKey,
+          api_secret: exchangeConfig.apiSecret,
         })
 
-      if (createError) throw createError
+      if (error) throw error
 
       router.push('/bots')
-    } catch (err: any) {
-      console.error('Failed to create bot:', err)
-      setError(err.message)
-      setIsCreating(false)
+    } catch (error) {
+      console.error('Error creating bot:', error)
+      form.setError('root', {
+        type: 'server',
+        message: 'Failed to create bot. Please try again.',
+      })
     }
-  }
-
-  const handlePairSelect = (pair: string) => {
-    setFormData(prev => ({ ...prev, pair }))
-    setPairSearch('')
-    setIsSearchFocused(false)
   }
 
   return (
     <div className="space-y-8">
       <AccountBalance className="mb-6" />
-      
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Bot Name
-          </label>
-          <input
-            type="text"
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="Enter bot name"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Bot Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="My Trading Bot" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Give your bot a unique name to identify it easily.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        <div className="space-y-2">
-          <label htmlFor="pair" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Trading Pair
-          </label>
-          <div className="relative">
-            <input
-              type="search"
-              placeholder={formData.pair || "Search trading pairs..."}
-              value={pairSearch}
-              onChange={(e) => setPairSearch(e.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => {
-                setTimeout(() => setIsSearchFocused(false), 200)
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-            />
-            {showDropdown && (
-              <div className="absolute z-10 w-full mt-1 max-h-60 overflow-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
-                {filteredPairs.map((pair) => (
-                  <div
-                    key={pair}
-                    className="px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, pair }))
-                      setPairSearch('')
-                      setIsSearchFocused(false)
-                    }}
-                  >
-                    {pair}
-                  </div>
-                ))}
-              </div>
+          <FormField
+            control={form.control}
+            name="pair"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Trading Pair</FormLabel>
+                <Select 
+                  onValueChange={field.onChange} 
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a trading pair" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {TRADING_PAIRS.map((pair) => (
+                      <SelectItem key={pair} value={pair}>
+                        {pair}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Choose the cryptocurrency pair you want to trade.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
             )}
+          />
+
+          <FormField
+            control={form.control}
+            name="maxPositionSize"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Maximum Position Size</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.0001"
+                    {...field}
+                    onChange={e => field.onChange(parseFloat(e.target.value))}
+                  />
+                </FormControl>
+                <FormDescription>
+                  The maximum amount of USDT to use per trade.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="stoplossPercentage"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Stoploss Percentage</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.1"
+                    {...field}
+                    onChange={e => field.onChange(parseFloat(e.target.value))}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Optional: Set a stoploss percentage to limit potential losses.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex justify-end space-x-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.push('/bots')}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Create Bot
+            </Button>
           </div>
-        </div>
-
-        <div className="flex justify-end space-x-4 mt-8">
-          <Button
-            variant="secondary"
-            onClick={() => router.push('/bots')}
-            size="lg"
-            className="w-[120px] font-semibold"
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="gradient"
-            onClick={handleSubmit}
-            disabled={isCreating || !formData.name || !formData.pair}
-            size="lg"
-            className="w-[120px] font-semibold"
-          >
-            <span className={isCreating ? 'invisible' : 'visible'}>Create Bot</span>
-            {isCreating && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-white"></div>
-              </div>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
-      )}
+        </form>
+      </Form>
     </div>
   )
 }
