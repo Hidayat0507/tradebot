@@ -29,12 +29,12 @@ async function createTestBot() {
     if (existingBot) {
       console.log('Bot already exists:', existingBot);
       
-      // Update the webhook secret and add position_size_percentage
+      // Update the webhook secret and add order_size
       const { data: updatedBot, error: updateError } = await supabase
         .from('bots')
-        .update({ 
+        .update({
           webhook_secret: WEBHOOK_SECRET,
-          position_size_percentage: 50 // Add position size percentage (50%)
+          order_size: 50 // Add order size (50%)
         })
         .eq('id', BOT_ID)
         .select()
@@ -45,7 +45,7 @@ async function createTestBot() {
         return;
       }
       
-      console.log('Updated bot with webhook secret and position size:', updatedBot);
+      console.log('Updated bot with webhook secret and order size:', updatedBot);
       return;
     }
     

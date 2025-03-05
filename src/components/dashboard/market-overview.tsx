@@ -63,8 +63,8 @@ export function MarketOverview() {
     }
 
     fetchMarketData()
-    // Refresh market data every 10 seconds
-    const interval = setInterval(fetchMarketData, 10000)
+    // Refresh market data every 30 seconds instead of 10 seconds
+    const interval = setInterval(fetchMarketData, 30000)
     return () => clearInterval(interval)
   }, [])
 

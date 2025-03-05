@@ -60,7 +60,7 @@ export async function executeTrade(signal: TradingViewSignal, bot: Bot): Promise
       const available = balance[currency]?.free || 0;
       
       // Use configured percentage or default to 100% of available balance
-      const percentage = bot.position_size_percentage || 100;
+      const percentage = bot.order_size || 100;
       if (percentage < 25 || percentage > 100 || percentage % 25 !== 0) {
         throw new TradeError('Position size percentage must be 25, 50, 75, or 100', 'INVALID_PERCENTAGE');
       }

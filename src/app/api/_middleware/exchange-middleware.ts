@@ -3,6 +3,7 @@ import * as ccxt from 'ccxt';
 import { ApiError } from './api-handler';
 import { decrypt } from '@/utils/encryption';
 import { logger } from '@/lib/logging';
+import { marketCache } from '@/lib/market-cache';
 
 export interface ExchangeCredentials {
   apiKey: string;
@@ -167,44 +168,123 @@ export const fetchMarketData = async (exchange_client: ccxt.Exchange, symbol: st
     // Format the symbol according to exchange requirements
     const formattedSymbol = formatSymbol(exchange_client, symbol);
     
-    logger.info('Fetching market data', { 
-      exchange: exchange_client.id, 
-      originalSymbol: symbol,
-      formattedSymbol
-    });
-    
-    // Fetch ticker data
-    const ticker = await exchange_client.fetchTicker(formattedSymbol);
-    
-    // Fetch order book
-    const orderBook = await exchange_client.fetchOrderBook(formattedSymbol);
-    
-    // Fetch OHLCV data (1 day timeframe)
-    const ohlcv = await exchange_client.fetchOHLCV(formattedSymbol, '1d', undefined, 1);
-    
-    return {
+    // Create a result object to store the data
+    const result: any = {
       symbol: symbol,
       formatted_symbol: formattedSymbol,
-      last_price: ticker.last,
-      bid: ticker.bid,
-      ask: ticker.ask,
-      volume_24h: ticker.baseVolume || ticker.quoteVolume,
-      change_24h: ticker.percentage,
-      high_24h: ticker.high,
-      low_24h: ticker.low,
-      order_book: {
+    };
+    
+    // Check cache for ticker data
+    const cachedTicker = marketCache.get<ccxt.Ticker>(exchange_client.id, symbol, 'ticker');
+    if (cachedTicker) {
+      logger.info('Using cached ticker data', { 
+        exchange: exchange_client.id, 
+        symbol
+      });
+      
+      // Use cached ticker data
+      result.last_price = cachedTicker.last;
+      result.bid = cachedTicker.bid;
+      result.ask = cachedTicker.ask;
+      result.volume_24h = cachedTicker.baseVolume || cachedTicker.quoteVolume;
+      result.change_24h = cachedTicker.percentage;
+      result.high_24h = cachedTicker.high;
+      result.low_24h = cachedTicker.low;
+    } else {
+      // Fetch ticker data from exchange
+      logger.info('Fetching ticker data', { 
+        exchange: exchange_client.id, 
+        symbol
+      });
+      
+      const ticker = await exchange_client.fetchTicker(formattedSymbol);
+      
+      // Cache the ticker data
+      marketCache.set(exchange_client.id, symbol, 'ticker', ticker);
+      
+      // Use fresh ticker data
+      result.last_price = ticker.last;
+      result.bid = ticker.bid;
+      result.ask = ticker.ask;
+      result.volume_24h = ticker.baseVolume || ticker.quoteVolume;
+      result.change_24h = ticker.percentage;
+      result.high_24h = ticker.high;
+      result.low_24h = ticker.low;
+    }
+    
+    // Check cache for order book data
+    const cachedOrderBook = marketCache.get<ccxt.OrderBook>(exchange_client.id, symbol, 'orderBook');
+    if (cachedOrderBook) {
+      logger.info('Using cached order book data', { 
+        exchange: exchange_client.id, 
+        symbol
+      });
+      
+      // Use cached order book data
+      result.order_book = {
+        bids: cachedOrderBook.bids.slice(0, 5).map(([price, amount]) => ({ price, amount })),
+        asks: cachedOrderBook.asks.slice(0, 5).map(([price, amount]) => ({ price, amount })),
+      };
+    } else {
+      // Fetch order book from exchange
+      logger.info('Fetching order book data', { 
+        exchange: exchange_client.id, 
+        symbol
+      });
+      
+      const orderBook = await exchange_client.fetchOrderBook(formattedSymbol);
+      
+      // Cache the order book data
+      marketCache.set(exchange_client.id, symbol, 'orderBook', orderBook);
+      
+      // Use fresh order book data
+      result.order_book = {
         bids: orderBook.bids.slice(0, 5).map(([price, amount]) => ({ price, amount })),
         asks: orderBook.asks.slice(0, 5).map(([price, amount]) => ({ price, amount })),
-      },
-      ohlcv: ohlcv.length > 0 ? {
+      };
+    }
+    
+    // Check cache for OHLCV data
+    const cachedOHLCV = marketCache.get<number[][]>(exchange_client.id, symbol, 'ohlcv');
+    if (cachedOHLCV) {
+      logger.info('Using cached OHLCV data', { 
+        exchange: exchange_client.id, 
+        symbol
+      });
+      
+      // Use cached OHLCV data
+      result.ohlcv = cachedOHLCV.length > 0 ? {
+        timestamp: cachedOHLCV[0][0],
+        open: cachedOHLCV[0][1],
+        high: cachedOHLCV[0][2],
+        low: cachedOHLCV[0][3],
+        close: cachedOHLCV[0][4],
+        volume: cachedOHLCV[0][5],
+      } : null;
+    } else {
+      // Fetch OHLCV data from exchange
+      logger.info('Fetching OHLCV data', { 
+        exchange: exchange_client.id, 
+        symbol
+      });
+      
+      const ohlcv = await exchange_client.fetchOHLCV(formattedSymbol, '1d', undefined, 1);
+      
+      // Cache the OHLCV data
+      marketCache.set(exchange_client.id, symbol, 'ohlcv', ohlcv);
+      
+      // Use fresh OHLCV data
+      result.ohlcv = ohlcv.length > 0 ? {
         timestamp: ohlcv[0][0],
         open: ohlcv[0][1],
         high: ohlcv[0][2],
         low: ohlcv[0][3],
         close: ohlcv[0][4],
         volume: ohlcv[0][5],
-      } : null,
-    };
+      } : null;
+    }
+    
+    return result;
   } catch (error) {
     logger.error('Error fetching market data', { 
       error: error instanceof Error ? error.message : String(error),
@@ -228,8 +308,27 @@ export const fetchMarketData = async (exchange_client: ccxt.Exchange, symbol: st
  */
 export async function validateMarket(exchange: ccxt.Exchange, symbol: string): Promise<boolean> {
   try {
-    // Fetch markets
+    // Check if we have cached markets for this exchange
+    const cachedMarkets = marketCache.get<ccxt.Market[]>(exchange.id, 'all', 'markets');
+    
+    if (cachedMarkets) {
+      logger.info('Using cached markets for validation', { 
+        exchange: exchange.id, 
+        symbol,
+        marketsCount: cachedMarkets.length
+      });
+      
+      // Check if the symbol exists in cached markets
+      const market = cachedMarkets.find(m => m && m.symbol === symbol);
+      return !!market;
+    }
+    
+    // No cached markets, fetch from exchange
+    logger.info('Fetching markets for validation', { exchange: exchange.id, symbol });
     const markets = await exchange.fetchMarkets();
+    
+    // Cache the markets for future use
+    marketCache.set(exchange.id, 'all', 'markets', markets);
     
     // Check if the symbol exists
     const market = markets.find(m => m && m.symbol === symbol);

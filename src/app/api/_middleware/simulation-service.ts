@@ -95,12 +95,12 @@ export async function executeSimulatedTrade(
       // Use a fixed balance of $10,000 for simulation
       const available = 10000;
       
-      // Use position_size_percentage from alert if provided, otherwise from bot config, or default to 100%
-      const percentage = alert.position_size_percentage || bot.position_size_percentage || 100;
+      // Use order_size from alert if provided, otherwise from bot config, or default to 100%
+      const percentage = alert.order_size || bot.order_size || 100;
       
-      logger.info('Using position size percentage for simulation', { 
+      logger.info('Using order size for simulation', { 
         percentage, 
-        source: alert.position_size_percentage ? 'alert' : (bot.position_size_percentage ? 'bot config' : 'default')
+        source: alert.order_size ? 'alert' : (bot.order_size ? 'bot config' : 'default')
       });
       
       const positionSize = (available * percentage) / 100;

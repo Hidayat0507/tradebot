@@ -3,6 +3,8 @@ import { ApiError, validateFields } from './api-handler';
 import { ExchangeCredentials, createExchangeClient, validateMarket } from './exchange-middleware';
 import { logger } from '@/lib/logging';
 import { executeSimulatedTrade } from './simulation-service';
+import { marketCache } from '@/lib/market-cache';
+import * as ccxt from 'ccxt';
 
 // Enable simulation mode for testing
 const SIMULATION_MODE = process.env.SIMULATION_MODE === 'true';
@@ -16,6 +18,7 @@ interface TradingViewAlert {
   bot_id: string;
   secret?: string;
   amount?: number; // Optional direct amount for manual testing
+  order_size?: number; // Optional percentage of available balance to use (25, 50, 75, or 100)
 }
 
 export interface BotData {
@@ -25,7 +28,7 @@ export interface BotData {
   api_secret: string;
   user_id: string;
   webhook_secret: string;
-  position_size_percentage?: number; // Percentage of available balance to use (25, 50, 75, or 100)
+  order_size?: number; // Percentage of available balance to use (25, 50, 75, or 100)
   name: string;
 }
 
@@ -120,19 +123,56 @@ export async function executeTrade(
         alert.symbol.split('/')[0];  // Base currency for selling
       
       available = balance[currency]?.free || 0;
+      
+      logger.info('Available balance', { currency, available });
     }
     
-    // Use configured percentage or default to 100% of available balance
-    // If position_size_percentage doesn't exist, default to 100%
-    const percentage = bot.position_size_percentage || 100;
+    // Use order_size from alert if provided, otherwise from bot config, or default to 100%
+    const percentage = alert.order_size || bot.order_size || 100;
     
-    // Skip validation in case the column doesn't exist in the database
-    // if (percentage < 25 || percentage > 100 || percentage % 25 !== 0) {
-    //   throw new ApiError('Position size percentage must be 25, 50, 75, or 100', 400);
-    // }
+    logger.info('Using order size', { 
+      percentage, 
+      source: alert.order_size ? 'alert' : (bot.order_size ? 'bot config' : 'default')
+    });
     
     positionSize = (available * percentage) / 100;
     const amount = positionSize / price;
+
+    // Add minimum order size check for Hyperliquid
+    let finalAmount = amount;
+    const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
+    
+    if (isHyperliquid) {
+      // Calculate the order value in USD
+      const orderValue = amount * price;
+      
+      logger.info('Checking minimum order value for Hyperliquid', { 
+        orderValue,
+        minimumOrderValue: 10,
+        amount,
+        price
+      });
+      
+      // Hyperliquid requires a minimum order value of $10
+      if (orderValue < 10) {
+        logger.warn('Order value is too small for Hyperliquid, adjusting to minimum', { 
+          calculatedOrderValue: orderValue, 
+          minimumOrderValue: 10 
+        });
+        
+        // Calculate the minimum amount based on the $10 minimum order value
+        finalAmount = 10 / price;
+        
+        // Add a small buffer to ensure we meet the minimum (10% extra)
+        finalAmount = finalAmount * 1.1;
+        
+        logger.info('Adjusted amount for minimum order size', {
+          originalAmount: amount,
+          adjustedAmount: finalAmount,
+          adjustedValue: finalAmount * price
+        });
+      }
+    }
 
     // Execute the trade
     let order;
@@ -148,12 +188,12 @@ export async function executeTrade(
         type: 'market',
         side: alert.action.toLowerCase(),
         price: price,
-        amount: amount,
-        filled: amount,
+        amount: finalAmount,
+        filled: finalAmount,
         remaining: 0,
-        cost: amount * price,
+        cost: finalAmount * price,
         fee: {
-          cost: amount * price * 0.001, // 0.1% fee
+          cost: finalAmount * price * 0.001, // 0.1% fee
           currency: alert.symbol.split('/')[1]
         },
         info: {
@@ -169,7 +209,7 @@ export async function executeTrade(
         alert.symbol,
         'market',
         alert.action.toLowerCase(),
-        amount,
+        finalAmount,
         isHyperliquid ? price : undefined, // Include price for Hyperliquid
         {
           ...(alert.stoplossPercent ? {
@@ -209,7 +249,7 @@ export async function saveTrade(
     bot_id: botId,
     symbol: alert.symbol,
     side: alert.action.toLowerCase(),
-    status: 'completed',
+    status: 'filled',
     size: order.amount,
     price: order.price || order.average || price,
     pnl: null
@@ -269,7 +309,27 @@ export async function processWebhookAlert(
       throw new ApiError(`Invalid market: ${alert.symbol}`, 400);
     }
     
-    const ticker = await exchange_client.fetchTicker(alert.symbol);
+    // Try to get ticker from cache first
+    let ticker: ccxt.Ticker;
+    const cachedTicker = marketCache.get<ccxt.Ticker>(exchange_client.id, alert.symbol, 'ticker');
+    
+    if (cachedTicker) {
+      logger.info('Using cached ticker for trade price', { 
+        exchange: exchange_client.id, 
+        symbol: alert.symbol
+      });
+      ticker = cachedTicker;
+    } else {
+      // Fetch fresh ticker data
+      logger.info('Fetching fresh ticker for trade price', { 
+        exchange: exchange_client.id, 
+        symbol: alert.symbol
+      });
+      ticker = await exchange_client.fetchTicker(alert.symbol);
+      
+      // Cache the ticker for future use
+      marketCache.set(exchange_client.id, alert.symbol, 'ticker', ticker);
+    }
     
     if (!ticker.last) {
       throw new ApiError('Could not determine trade price', 400);

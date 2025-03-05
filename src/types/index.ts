@@ -7,7 +7,7 @@ export type { Database, SupportedExchange, TradeSide, TradeStatus } from '@/lib/
 export type Trade = Database['public']['Tables']['trades']['Row']
 export type Bot = Database['public']['Tables']['bots']['Row'] & { 
   webhook_secret: string;
-  position_size_percentage?: number; // Percentage of available balance to use (25, 50, 75, or 100)
+  order_size?: number; // Percentage of available balance to use (25, 50, 75, or 100)
 }
 
 // Trading View specific types
@@ -22,7 +22,7 @@ export interface TradingViewSignal {
   strategy?: string     // Default: ""
   stoplossPercent?: number  // Default: none
   amount?: number       // Optional direct amount for manual testing
-  position_size_percentage?: number // Optional percentage of available balance to use (25, 50, 75, or 100)
+  order_size?: number // Optional percentage of available balance to use (25, 50, 75, or 100)
 }
 
 // Stats types
