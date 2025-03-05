@@ -1,10 +1,11 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { type NextRequest, NextResponse } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-export async function createClient() {
-  const cookieStore = await cookies()
+export async function createClient(request: NextRequest) {
+  const cookieStore = request.cookies
 
-  return createServerClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -13,29 +14,32 @@ export async function createClient() {
           return cookieStore.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({
-              name,
-              value,
-              path: '/',
-              ...options,
-            })
-          } catch (error) {
-            // Handle cookies in Edge Runtime
-          }
+          cookieStore.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.delete({
-              name,
-              path: '/',
-              ...options,
-            })
-          } catch (error) {
-            // Handle cookies in Edge Runtime
-          }
+          cookieStore.delete(name)
         },
       },
+    }
+  )
+
+  return supabase
+}
+
+/**
+ * Create a service role client that can bypass RLS policies
+ * Use this only for server-to-server operations like webhooks
+ * where user authentication isn't available
+ */
+export function createServiceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     }
   )
 }

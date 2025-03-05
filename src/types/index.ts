@@ -1,26 +1,28 @@
-import type { Database } from '@/lib/database/schema'
-import type { SupportedExchange, TradeSide, TradeStatus } from '@/lib/database/schema'
-
-// Re-export database types
-export type Bot = Database['public']['Tables']['bots']['Row']
-export type Trade = Database['public']['Tables']['trades']['Row']
-export type ExchangeConfig = Database['public']['Tables']['exchange_config']['Row']
+import type { Database, SupportedExchange, TradeSide, TradeStatus } from '@/lib/database/schema'
 
 // Re-export common types
-export type { SupportedExchange, TradeSide, TradeStatus }
+export type { Database, SupportedExchange, TradeSide, TradeStatus } from '@/lib/database/schema'
+
+// Database row types for convenience
+export type Trade = Database['public']['Tables']['trades']['Row']
+export type Bot = Database['public']['Tables']['bots']['Row'] & { 
+  webhook_secret: string;
+  position_size_percentage?: number; // Percentage of available balance to use (25, 50, 75, or 100)
+}
 
 // Trading View specific types
 export interface TradingViewSignal {
-  bot_id: string;  // Required bot ID
-  action: TradeSide;
-  symbol: string;
-  timestamp: string;  // Required ISO timestamp
-  order_size: string;  // Required (e.g., "100%")
-  position_size: number;  // Required position size
-  price?: number;  // Optional price
-  strategy?: string;  // Optional strategy name
-  stoploss?: number;
-  stoplossPercent?: number;
+  // Required fields
+  bot_id: string
+  symbol: string
+  action: TradeSide
+  
+  // Optional fields
+  price?: number        // Default: market price
+  strategy?: string     // Default: ""
+  stoplossPercent?: number  // Default: none
+  amount?: number       // Optional direct amount for manual testing
+  position_size_percentage?: number // Optional percentage of available balance to use (25, 50, 75, or 100)
 }
 
 // Stats types

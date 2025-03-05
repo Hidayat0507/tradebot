@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card"
 import { CopyButton } from "@/components/ui/copy-button"
 
-export default function ApiDocumentation({ botId }: { botId: string }) {
+export default function ApiDocumentation({ botId }: { botId?: string }) {
   const buyJson = {
     symbol: "BTCUSDT",
     action: "BUY",
@@ -19,6 +19,10 @@ export default function ApiDocumentation({ botId }: { botId: string }) {
     position_size: "0",
     timestamp: new Date().toISOString()
   }
+
+  const webhookUrl = botId 
+    ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhook/${botId}`
+    : 'https://your-site.com/api/webhook/<bot-id>'
 
   return (
     <Card className="p-6 mt-8 border border-gray-200 dark:border-gray-800">
@@ -42,6 +46,19 @@ export default function ApiDocumentation({ botId }: { botId: string }) {
               <li><code className="text-blue-600 dark:text-blue-400">position_size</code>: Target position size (e.g., "1" for full, "0" to close)</li>
               <li><code className="text-blue-600 dark:text-blue-400">timestamp</code>: ISO string (optional, added if missing)</li>
             </ul>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Webhook URL</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            {botId 
+              ? "Use this unique webhook URL to send trading signals to your bot:"
+              : "After creating your bot, you'll get a unique webhook URL in this format:"}
+          </p>
+          <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-2 rounded-md">
+            <code className="text-sm flex-1">{webhookUrl}</code>
+            {botId && <CopyButton value={webhookUrl} />}
           </div>
         </div>
 

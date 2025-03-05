@@ -1,6 +1,8 @@
+import { createClient } from '@/utils/supabase/server';
 import { supabase } from './client';
-import type { Trade, ExchangeConfig } from '@/types';
+import type { Trade, Bot } from '@/types';
 import type { Database } from './schema';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export class DatabaseError extends Error {
   constructor(message: string) {
@@ -10,7 +12,7 @@ export class DatabaseError extends Error {
 }
 
 type TradeInsert = Database['public']['Tables']['trades']['Insert'];
-type ExchangeConfigInsert = Database['public']['Tables']['exchange_config']['Insert'];
+type BotInsert = Database['public']['Tables']['bots']['Insert'];
 
 export async function getTrades(userId: string): Promise<Trade[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -27,49 +29,14 @@ export async function getTrades(userId: string): Promise<Trade[]> {
   return data || [];
 }
 
-export async function getExchangeConfig(userId: string): Promise<ExchangeConfig> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new DatabaseError('Database configuration missing');
-  }
-
-  const { data, error } = await supabase
-    .from('exchange_config')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+export async function saveTrade(
+  trade: Omit<Trade, 'id' | 'created_at' | 'updated_at'>
+): Promise<void> {
+  const { error } = await supabase.from('trades').insert(trade)
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      throw new DatabaseError('No exchange configuration found');
-    }
-    throw new DatabaseError(`Failed to get exchange config: ${error.message}`);
+    throw new DatabaseError(`Failed to save trade: ${error.message}`)
   }
-
-  return data;
-}
-
-export async function saveTrade(trade: Omit<Trade, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new DatabaseError('Database configuration missing');
-  }
-
-  const tradeData: TradeInsert = {
-    external_id: trade.external_id,
-    user_id: trade.user_id,
-    bot_id: trade.bot_id,
-    symbol: trade.symbol,
-    side: trade.side,
-    price: trade.price,
-    size: trade.size,
-    status: trade.status,
-    pnl: trade.pnl
-  };
-
-  const { error } = await supabase
-    .from('trades')
-    .insert([tradeData]);
-
-  if (error) throw new DatabaseError(`Failed to save trade: ${error.message}`);
 }
 
 export async function updateTradeStatus(
@@ -77,39 +44,26 @@ export async function updateTradeStatus(
   status: Trade['status'],
   pnl?: number
 ): Promise<void> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new DatabaseError('Database configuration missing');
+  const updates: Partial<Trade> = { status }
+  if (typeof pnl === 'number') {
+    updates.pnl = pnl
   }
 
   const { error } = await supabase
     .from('trades')
-    .update({
-      status,
-      pnl,
-      closed_at: status === 'CLOSED' ? new Date().toISOString() : null
-    })
-    .eq('id', tradeId);
+    .update(updates)
+    .eq('id', tradeId)
 
-  if (error) throw new DatabaseError(`Failed to update trade status: ${error.message}`);
+  if (error) {
+    throw new DatabaseError(`Failed to update trade status: ${error.message}`)
+  }
 }
 
-export async function saveExchangeConfig(
-  config: Omit<ExchangeConfig, 'id' | 'created_at' | 'updated_at'>
-): Promise<void> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new DatabaseError('Database configuration missing');
-  }
-
-  const configData: ExchangeConfigInsert = {
-    user_id: config.user_id,
-    exchange: config.exchange,
-    api_key: config.api_key,
-    api_secret: config.api_secret
-  };
-
+export async function toggleBot(botId: string, enabled: boolean): Promise<void> {
   const { error } = await supabase
-    .from('exchange_config')
-    .upsert([configData]);
+    .from('bots')
+    .update({ enabled })
+    .eq('id', botId)
 
-  if (error) throw new DatabaseError(`Failed to save exchange config: ${error.message}`);
+  if (error) throw new DatabaseError(`Failed to toggle bot: ${error.message}`)
 }

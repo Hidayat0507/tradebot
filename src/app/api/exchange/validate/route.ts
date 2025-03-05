@@ -1,52 +1,48 @@
-import { NextResponse } from 'next/server'
-import ccxt from 'ccxt'
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
+import { validateAndStoreCredentials, ExchangeError } from '@/app/api/_middleware/exchange';
+import type { SupportedExchange } from '@/lib/database/schema';
 
-const SUPPORTED_EXCHANGES = ['binance', 'coinbase', 'kraken'] as const
-type SupportedExchange = typeof SUPPORTED_EXCHANGES[number]
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { apiKey, apiSecret, exchange = 'binance' } = await request.json()
+    const body = await request.json();
+    const { apiKey, apiSecret, exchange, botId } = body;
 
-    if (!apiKey || !apiSecret) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'API key and secret are required' 
-      }, { status: 400 })
+    // Validate required fields
+    if (!exchange) {
+      throw new ExchangeError('Exchange is required', 400);
     }
 
-    if (!SUPPORTED_EXCHANGES.includes(exchange as SupportedExchange)) {
-      return NextResponse.json({ 
-        success: false, 
-        error: `Exchange ${exchange} is not supported. Supported exchanges: ${SUPPORTED_EXCHANGES.join(', ')}` 
-      }, { status: 400 })
+    if (!botId) {
+      throw new ExchangeError('Bot ID is required', 400);
     }
 
-    // Initialize exchange client
-    const exchangeClient = new ccxt[exchange as SupportedExchange]({
+    // For Hyperliquid, apiKey is the wallet address
+    if (!apiKey) {
+      throw new ExchangeError(
+        exchange === 'hyperliquid' 
+          ? 'Wallet address is required' 
+          : 'API key is required',
+        400
+      );
+    }
+
+    // Validate and store credentials
+    const result = await validateAndStoreCredentials(
+      request,
+      botId,
       apiKey,
-      secret: apiSecret,
-      enableRateLimit: true
-    })
+      apiSecret || '', // Use empty string for Hyperliquid
+      exchange as SupportedExchange
+    );
 
-    // Test API connection
-    try {
-      await exchangeClient.fetchBalance()
-      return NextResponse.json({ 
-        success: true,
-        message: 'API credentials validated successfully'
-      })
-    } catch (error: any) {
-      return NextResponse.json({ 
-        success: false,
-        error: error.message || 'Invalid API credentials'
-      }, { status: 400 })
-    }
+    return NextResponse.json(result);
   } catch (error: any) {
-    console.error('Exchange validation error:', error)
-    return NextResponse.json({ 
-      success: false,
-      error: error.message || 'Failed to validate exchange credentials'
-    }, { status: 500 })
+    // Use statusCode from ExchangeError if available
+    const status = error instanceof ExchangeError ? error.statusCode : 500;
+    const message = error.message || 'Failed to validate exchange credentials';
+    
+    return NextResponse.json({ error: message }, { status });
   }
 }

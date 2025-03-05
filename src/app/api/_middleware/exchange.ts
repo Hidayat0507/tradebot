@@ -1,5 +1,8 @@
 import * as ccxt from 'ccxt';
 import { createClient } from '@/utils/supabase/server';
+import { encrypt } from '@/utils/encryption';
+import type { SupportedExchange } from '@/types';
+import { NextRequest } from 'next/server';
 
 export class ExchangeError extends Error {
   constructor(message: string, public statusCode: number = 500, public help?: string) {
@@ -8,63 +11,112 @@ export class ExchangeError extends Error {
   }
 }
 
-export async function createExchangeClient(userId: string): Promise<ccxt.binance> {
-  if (!userId) {
-    throw new ExchangeError('User ID is required', 401);
-  }
-
-  // Get API credentials from database
-  const supabase = await createClient();
-  const { data: config, error: dbError } = await supabase
-    .from('exchange_config')
-    .select('api_key, api_secret')
-    .eq('user_id', userId)
-    .single();
-
-  if (dbError) {
-    console.error('Database error:', dbError);
-    throw new ExchangeError('Failed to fetch exchange configuration', 500);
+export async function createExchangeClient(apiKey: string, apiSecret: string, exchange: SupportedExchange): Promise<ccxt.Exchange> {
+  if (!apiKey) {
+    throw new ExchangeError('API key is required', 400);
   }
   
-  if (!config) {
-    throw new ExchangeError('No API credentials found', 404);
-  }
-
-  if (!config.api_key || !config.api_secret) {
-    throw new ExchangeError('Invalid API credentials', 400);
-  }
-
-  // Initialize Binance client
-  try {
-    return new ccxt.binance({
-      apiKey: config.api_key,
-      secret: config.api_secret,
-      enableRateLimit: true,
-    });
-  } catch (error) {
-    console.error('Exchange client creation error:', error);
-    throw new ExchangeError('Failed to initialize exchange client', 500);
-  }
-}
-
-export async function validateExchangeCredentials(apiKey: string, apiSecret: string): Promise<void> {
-  if (!apiKey || !apiSecret) {
-    throw new ExchangeError('API key and secret are required', 400);
+  // For Hyperliquid, we only need the wallet address (apiKey)
+  if (exchange !== 'hyperliquid' && !apiSecret) {
+    throw new ExchangeError('API secret is required', 400);
   }
 
   try {
-    const exchange = new ccxt.binance({
+    // Initialize exchange with rate limiting enabled (default)
+    const client = new ccxt[exchange]({
       apiKey,
-      secret: apiSecret,
+      secret: apiSecret || '', // Use empty string as fallback for Hyperliquid
       enableRateLimit: true,
     });
 
-    // Test API credentials by fetching account info
-    await exchange.fetchBalance();
-  } catch (error) {
+    // Load markets to validate exchange connection
+    await client.loadMarkets();
+    
+    return client;
+  } catch (error: any) {
+    console.error('Error initializing exchange client:', error);
     if (error instanceof ccxt.AuthenticationError) {
       throw new ExchangeError('Invalid API credentials', 401);
     }
-    throw new ExchangeError('Failed to validate exchange credentials', 500);
+    if (error instanceof ccxt.PermissionDenied) {
+      throw new ExchangeError('API key does not have required permissions', 403);
+    }
+    if (error instanceof ccxt.RateLimitExceeded) {
+      throw new ExchangeError('Rate limit exceeded - please try again later', 429);
+    }
+    if (error instanceof ccxt.NetworkError) {
+      throw new ExchangeError('Network error - please check your connection', 503);
+    }
+    // Log the actual error for debugging
+    console.error('Detailed error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new ExchangeError(`Failed to initialize exchange client: ${error.message}`, 500);
+  }
+}
+
+export async function validateAndStoreCredentials(
+  request: NextRequest,
+  botId: string,
+  apiKey: string,
+  apiSecret: string,
+  exchange: SupportedExchange
+): Promise<{ success: boolean, message: string }> {
+  try {
+    // Validate credentials
+    if (!apiKey) {
+      throw new ExchangeError('API key is required', 400);
+    }
+    
+    // For non-Hyperliquid exchanges, we need both key and secret
+    if (exchange !== 'hyperliquid' && !apiSecret) {
+      throw new ExchangeError('API secret is required', 400);
+    }
+    
+    // Use the standard validation for all exchanges
+    const client = await createExchangeClient(apiKey, apiSecret, exchange);
+    
+    // Special handling for Hyperliquid fetchBalance
+    if (exchange === 'hyperliquid') {
+      await client.fetchBalance({ user: apiKey }); // Use apiKey as wallet address
+    } else {
+      await client.fetchBalance();
+    }
+
+    // Encrypt the API secret if provided
+    let encryptedSecret = null;
+    if (apiSecret) {
+      try {
+        encryptedSecret = await encrypt(apiSecret);
+      } catch (encryptError) {
+        console.error('Failed to encrypt API secret:', encryptError);
+        throw new ExchangeError('Failed to encrypt API credentials', 500);
+      }
+    }
+
+    // Update the bot with credentials
+    const supabase = await createClient(request);
+    const { error } = await supabase
+      .from('bots')
+      .update({
+        api_key: apiKey,
+        api_secret: encryptedSecret
+      })
+      .eq('id', botId);
+
+    if (error) {
+      throw new ExchangeError(`Failed to store exchange credentials: ${error.message}`, 500);
+    }
+
+    return { success: true, message: 'API validated successfully' };
+  } catch (error: any) {
+    // If it's already an ExchangeError, rethrow it
+    if (error instanceof ExchangeError) {
+      throw error;
+    }
+    // Otherwise wrap it in an ExchangeError
+    throw new ExchangeError(`Exchange validation failed: ${error.message}`, 500);
   }
 }

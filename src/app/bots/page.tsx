@@ -4,17 +4,19 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
+import { BotBalance } from '@/app/bots/components/bot-balance'
 
 type Bot = {
   id: string
-  name: string
   user_id: string
+  name: string
   exchange: string
   pair: string
   max_position_size: number
-  stoploss_percentage: number | null
-  status: 'active' | 'paused' | 'stopped'
-  webhook_secret: string
+  stoploss_percentage?: number
+  enabled: boolean
+  api_key: string
+  api_secret: string
   created_at: string
   updated_at: string
 }
@@ -53,7 +55,7 @@ export default function BotsPage() {
       setError(null)
       const { error: toggleError } = await supabase
         .from('bots')
-        .update({ status: bot.status === 'active' ? 'paused' : 'active' })
+        .update({ enabled: !bot.enabled })
         .eq('id', bot.id)
 
       if (toggleError) throw toggleError
@@ -105,6 +107,7 @@ export default function BotsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pair</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Max Position</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stoploss</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Balance</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
             </tr>
@@ -118,15 +121,16 @@ export default function BotsPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {bot.stoploss_percentage ? `${bot.stoploss_percentage}%` : '-'}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  <BotBalance botId={bot.id} />
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    bot.status === 'active' 
+                    bot.enabled 
                       ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
-                      : bot.status === 'paused' 
-                        ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                        : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                   }`}>
-                    {bot.status === 'active' ? 'Active' : bot.status === 'paused' ? 'Paused' : 'Stopped'}
+                    {bot.enabled ? 'Active' : 'Paused'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -135,11 +139,11 @@ export default function BotsPage() {
                       <Button variant="default" size="sm">View</Button>
                     </Link>
                     <Button 
-                      variant={bot.status === 'active' ? "secondary" : "primary"}
+                      variant={bot.enabled ? "secondary" : "primary"}
                       size="sm"
                       onClick={() => handleToggleBot(bot)}
                     >
-                      {bot.status === 'active' ? 'Pause' : 'Activate'}
+                      {bot.enabled ? 'Pause' : 'Activate'}
                     </Button>
                     <Button 
                       variant="destructive"

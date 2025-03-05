@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (token_hash && type) {
-    const supabase = await createClient()
+    const supabase = await createClient(request)
 
     const { error } = await supabase.auth.verifyOtp({
       type,

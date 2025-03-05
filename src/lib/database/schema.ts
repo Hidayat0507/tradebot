@@ -1,5 +1,5 @@
 // Base types that represent our database enums
-export type SupportedExchange = 'binance' | 'coinbase' | 'kraken'
+export type SupportedExchange = 'binance' | 'hyperliquid'
 export type TradeSide = 'BUY' | 'SELL'
 export type TradeStatus = 'OPEN' | 'CLOSED' | 'CANCELLED'
 
@@ -14,31 +14,49 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      exchange_config: {
+      bots: {
         Row: {
           id: string
           user_id: string
+          name: string
           exchange: string
+          pair: string
+          max_position_size: number
+          stoploss_percentage?: number
+          enabled: boolean
           api_key: string
           api_secret: string
+          webhook_secret: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
+          name: string
           exchange: string
+          pair: string
+          max_position_size: number
+          stoploss_percentage?: number
+          enabled: boolean
           api_key: string
           api_secret: string
+          webhook_secret: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
+          name?: string
           exchange?: string
+          pair?: string
+          max_position_size?: number
+          stoploss_percentage?: number
+          enabled?: boolean
           api_key?: string
           api_secret?: string
+          webhook_secret?: string
           created_at?: string
           updated_at?: string
         }
@@ -87,37 +105,46 @@ export interface Database {
           updated_at?: string
         }
       }
-      bots: {
+      exchange_config: {
         Row: {
-          id: string;
-          name: string;
-          user_id: string;
-          exchange: SupportedExchange;
-          pair: string;
-          max_position_size: number;
-          stoploss_percentage: number | null;
-          enabled: boolean;
-          webhook_secret: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: Omit<
-          Database['public']['Tables']['bots']['Row'],
-          'id' | 'created_at' | 'updated_at'
-        >;
-        Update: Partial<Database['public']['Tables']['bots']['Insert']>;
-      };
+          id: string
+          user_id: string
+          exchange: string
+          api_key: string
+          api_secret: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          exchange: string
+          api_key: string
+          api_secret: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          exchange?: string
+          api_key?: string
+          api_secret?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
-      [_ in never]: never;
+      [_ in never]: never
     }
     Functions: {
-      [_ in never]: never;
+      [_ in never]: never
     }
     Enums: {
-      trade_side: TradeSide;
-      trade_status: TradeStatus;
-      supported_exchange: SupportedExchange;
-    };
-  };
-};
+      trade_side: TradeSide
+      trade_status: TradeStatus
+      supported_exchange: SupportedExchange
+    }
+  }
+}

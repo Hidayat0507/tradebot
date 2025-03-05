@@ -1,87 +1,107 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
-import { BotFormValues } from '@/lib/validations/bot'
+import { NextRequest } from 'next/server'
+import type { BotFormData } from '@/lib/validations/bot'
+import {
+  getBotWithOwnership,
+  handleApiError,
+  successResponse,
+  ApiError,
+  validateFields
+} from '@/app/api/_middleware/api-handler'
+import { encrypt } from '@/utils/encryption'
+import { logger } from '@/lib/logging'
 
 // GET /api/bots/[id] - Get a specific bot's details
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('bots')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-
-    return NextResponse.json(data)
+    const { id } = await props.params;
+    const { bot } = await getBotWithOwnership(request, id)
+    return successResponse(bot)
   } catch (error) {
-    console.error('Error fetching bot:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch bot' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
 
-// PATCH /api/bots/[id] - Update a bot's settings
-export async function PATCH(
+// PUT /api/bots/[id] - Update a bot's settings
+export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-    const body = await request.json() as BotFormValues
-    const supabase = await createClient()
-
-    const { error } = await supabase
-      .from('bots')
-      .update(body)
-      .eq('id', id)
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+    const { id } = await props.params;
+    const { bot, supabase, user } = await getBotWithOwnership(request, id)
+    const body = await request.json() as BotFormData
+    
+    // Validate update data
+    if (body.exchange) {
+      validateFields(
+        body,
+        [],
+        {
+          exchange: (value) => 
+            ['binance', 'hyperliquid'].includes(value) || 
+            'Invalid exchange. Must be binance or hyperliquid'
+        }
+      )
     }
 
-    return NextResponse.json({ message: 'Bot updated successfully' })
+    // Prepare update data
+    const updateData = { ...body, updated_at: new Date().toISOString() }
+    
+    // Encrypt API secret if provided
+    if (updateData.api_secret) {
+      try {
+        updateData.api_secret = await encrypt(updateData.api_secret)
+        logger.info('API secret encrypted successfully', { botId: id })
+      } catch (encryptError) {
+        logger.error('Failed to encrypt API secret', { error: encryptError, botId: id })
+        throw new ApiError('Failed to encrypt API secret', 500)
+      }
+    }
+
+    const { data: updatedBot, error } = await supabase
+      .from('bots')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      logger.error('Failed to update bot', { error, botId: id, userId: user.id })
+      throw new ApiError('Failed to update bot', 400)
+    }
+
+    logger.info('Bot updated successfully', { botId: id, userId: user.id })
+    return successResponse(updatedBot)
   } catch (error) {
-    console.error('Error updating bot:', error)
-    return NextResponse.json(
-      { error: 'Failed to update bot' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
 
 // DELETE /api/bots/[id] - Delete a bot
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-    const supabase = await createClient()
+    const { id } = await props.params;
+    const { supabase, user } = await getBotWithOwnership(request, id)
+    
     const { error } = await supabase
       .from('bots')
       .delete()
       .eq('id', id)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      logger.error('Failed to delete bot', { error, botId: id, userId: user.id })
+      throw new ApiError('Failed to delete bot', 400)
     }
 
-    return NextResponse.json({ message: 'Bot deleted successfully' })
+    logger.info('Bot deleted successfully', { botId: id, userId: user.id })
+    return successResponse(null, 204)
   } catch (error) {
-    console.error('Error deleting bot:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete bot' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

@@ -1,362 +1,162 @@
 import * as ccxt from 'ccxt';
-import type { Trade, TradeSide, SupportedExchange, TradeStatus, TradingViewSignal } from '@/types';
-import { getExchangeConfig } from '@/lib/database/operations';
+import type { Trade, TradeSide, SupportedExchange, TradeStatus, TradingViewSignal, Bot } from '@/types';
 import { logger } from './logging';
 import { notifications } from './notifications';
-
-// Type for exchange configuration
-interface ExchangeOptions {
-  apiKey: string;
-  secret: string;
-  enableRateLimit?: boolean;
-  timeout?: number;
-}
-
-// Type for CCXT exchange constructors
-type ExchangeConstructor = new (config: ExchangeOptions) => ccxt.Exchange;
+import { decrypt } from '@/utils/encryption';
 
 // Map of supported exchanges to their CCXT classes
-const exchangeClasses: Record<SupportedExchange, ExchangeConstructor> = {
+const exchangeClasses: Record<SupportedExchange, typeof ccxt.Exchange> = {
   binance: ccxt.binance,
-  coinbase: ccxt.coinbase,
-  kraken: ccxt.kraken,
-}
+  hyperliquid: ccxt.hyperliquid
+};
 
-async function validateMarket(exchange: ccxt.Exchange, symbol: string): Promise<void> {
-  try {
-    await exchange.loadMarkets()
-    if (!(symbol in exchange.markets)) {
-      throw new Error(`Symbol ${symbol} not found in ${exchange.name}`)
-    }
-  } catch (error: any) {
-    logger.tradingError('validate_market', error, { symbol, exchange: exchange.name })
-    throw new Error(`Failed to validate market: ${error?.message || 'Unknown error'}`)
+export class TradeError extends Error {
+  constructor(message: string, public code: string, public details?: any) {
+    super(message);
+    this.name = 'TradeError';
   }
 }
 
-async function checkBalance(
-  exchange: ccxt.Exchange, 
-  symbol: string, 
-  side: string, 
-  amount: number,
-  price: number
-): Promise<void> {
+export async function executeTrade(signal: TradingViewSignal, bot: Bot): Promise<Omit<Trade, 'id' | 'created_at' | 'updated_at'>> {
   try {
-    const [base, quote] = symbol.split('/')
-    const balance = await exchange.fetchBalance()
-    
-    if (side === 'buy') {
-      const required = amount * price
-      const available = balance[quote]?.free || 0
-      
-      if (available < required) {
-        throw new Error(
-          `Insufficient ${quote} balance. Required: ${required}, Available: ${available}`
-        )
-      }
-    } else {
-      const available = balance[base]?.free || 0
-      if (available < amount) {
-        throw new Error(
-          `Insufficient ${base} balance. Required: ${amount}, Available: ${available}`
-        )
-      }
+    // Initialize exchange
+    const ExchangeClass = exchangeClasses[bot.exchange as SupportedExchange];
+    if (!ExchangeClass) {
+      throw new TradeError(`Exchange ${bot.exchange} not supported`, 'UNSUPPORTED_EXCHANGE');
     }
-  } catch (error: any) {
-    logger.tradingError('check_balance', error, { symbol, side, amount })
-    throw new Error(`Failed to check balance: ${error?.message || 'Unknown error'}`)
-  }
-}
 
-function calculatePositionSize(price: number, maxPositionSize: number): number {
-  return maxPositionSize / price;
-}
+    const exchange = new ExchangeClass({
+      apiKey: decrypt(bot.api_key),
+      secret: decrypt(bot.api_secret),
+      enableRateLimit: true
+    });
 
-// Maximum time to wait for order verification
-const ORDER_VERIFICATION_TIMEOUT = 5000;
+    // Load markets to validate symbol and get precision info
+    await exchange.loadMarkets();
+    const market = exchange.markets[signal.symbol];
+    if (!market) {
+      throw new TradeError(`Symbol ${signal.symbol} not found on ${bot.exchange}`, 'INVALID_SYMBOL');
+    }
 
-// Valid order statuses from CCXT
-type CCXTOrderStatus = 'open' | 'closed' | 'canceled';
+    // Verify market order support
+    if (!exchange.has['createMarketOrder']) {
+      throw new TradeError('Market orders not supported by exchange', 'UNSUPPORTED_ORDER_TYPE');
+    }
 
-async function verifyOrderStatus(
-  exchange: ccxt.Exchange,
-  orderId: string,
-  symbol: string
-): Promise<ccxt.Order> {
-  const startTime = Date.now();
-  
-  while (true) {
     try {
-      const order = await exchange.fetchOrder(orderId, symbol);
+      // Get current market price if not provided
+      const ticker = await exchange.fetchTicker(signal.symbol);
+      const price = signal.price || ticker.last;
+      if (!price) {
+        throw new TradeError('Could not determine trade price', 'PRICE_UNAVAILABLE');
+      }
+
+      // Get available balance
+      const balance = await exchange.fetchBalance();
+      const currency = signal.action === 'BUY' ? 
+        signal.symbol.split('/')[1] : // Quote currency for buying
+        signal.symbol.split('/')[0];  // Base currency for selling
       
-      if (order.status === 'closed') {
-        return order;
+      const available = balance[currency]?.free || 0;
+      
+      // Use configured percentage or default to 100% of available balance
+      const percentage = bot.position_size_percentage || 100;
+      if (percentage < 25 || percentage > 100 || percentage % 25 !== 0) {
+        throw new TradeError('Position size percentage must be 25, 50, 75, or 100', 'INVALID_PERCENTAGE');
       }
       
-      if (order.status === 'canceled') {
-        throw new Error('Order was canceled');
+      const positionSize = (available * percentage) / 100;
+      
+      // Calculate amount based on market type
+      let amount;
+      if (market.contractSize) {
+        // For contract/futures markets, convert to number of contracts
+        amount = Math.floor(positionSize / (price * market.contractSize));
+        if (amount < 1) {
+          throw new TradeError(
+            `Amount ${amount} is less than minimum contract size of 1`,
+            'INVALID_AMOUNT'
+          );
+        }
+      } else {
+        // For spot markets, calculate base currency amount
+        amount = positionSize / price;
       }
-      
-      if (Date.now() - startTime > ORDER_VERIFICATION_TIMEOUT) {
-        throw new Error('Order verification timeout');
-      }
-      
-      // Wait before checking again
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-    } catch (error: any) {
-      logger.tradingError('verify_order', error, { orderId, symbol })
-      throw new Error(`Failed to verify order: ${error?.message || 'Unknown error'}`)
-    }
-  }
-}
 
-async function executeOrderWithRetry(
-  exchange: ccxt.Exchange,
-  symbol: string,
-  side: 'buy' | 'sell',  
-  size: number
-): Promise<ccxt.Order> {
-  const maxRetries = 3;
-  let lastError: Error | null = null;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const order = await exchange.createMarketOrder(symbol, side, size);
-      
-      // Verify the order was executed
-      const verifiedOrder = await verifyOrderStatus(exchange, order.id, symbol);
-      
-      logger.info('Order executed', {
-        symbol,
-        side,
-        size,
-        price: verifiedOrder.price,
-        cost: verifiedOrder.cost
-      });
-      
-      return verifiedOrder;
-      
-    } catch (error: any) {
-      lastError = error;
-      logger.tradingError('execute_order', error, {
-        symbol,
-        side,
-        size,
-        attempt
-      });
-      
-      if (attempt < maxRetries) {
-        // Wait before retrying (exponential backoff)
-        const delay = Math.pow(2, attempt) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  throw new Error(
-    `Failed to execute order after ${maxRetries} attempts: ${lastError?.message}`
-  );
-}
-
-async function calculateStoplossPrice(
-  signal: TradingViewSignal,
-  entryPrice: number
-): Promise<number | null> {
-  if (signal.stoploss) {
-    return signal.stoploss;
-  }
-  
-  if (signal.stoplossPercent) {
-    const multiplier = signal.action === 'BUY' 
-      ? (1 - signal.stoplossPercent / 100)
-      : (1 + signal.stoplossPercent / 100);
-    return entryPrice * multiplier;
-  }
-  
-  return null;
-}
-
-async function placeStoplossOrder(
-  exchange: ccxt.Exchange,
-  symbol: string,
-  side: 'buy' | 'sell',
-  quantity: number,
-  stopPrice: number
-): Promise<ccxt.Order> {
-  try {
-    const stopSide = side === 'buy' ? 'sell' : 'buy';
-    
-    const order = await exchange.createOrder(symbol, 'stop', stopSide, quantity, undefined, {
-      stopPrice,
-      type: 'stop_market'
-    });
-    
-    logger.info('Stoploss order placed', {
-      symbol,
-      side: stopSide,
-      quantity,
-      stopPrice
-    });
-    
-    return order;
-    
-  } catch (error: any) {
-    logger.tradingError('place_stoploss', error, {
-      symbol,
-      side,
-      quantity,
-      stopPrice
-    });
-    throw error;
-  }
-}
-
-export async function executeTrade(signal: TradingViewSignal): Promise<Omit<Trade, 'id' | 'created_at' | 'updated_at'>> {
-  try {
-    // For testing, use mock config and responses
-    const mockConfig = {
-      exchange: 'binance' as const,
-      api_key: 'test',
-      api_secret: 'test',
-      user_id: 'test_user'
-    };
-
-    // Mock exchange with test responses
-    const mockExchange = {
-      name: 'Binance',
-      markets: {
-        'BTC/USDT': { symbol: 'BTC/USDT', active: true },
-        'ETH/USDT': { symbol: 'ETH/USDT', active: true }
-      },
-      has: {
-        createMarketOrder: true,
-        createOrder: true,
-        fetchBalance: true,
-        fetchTicker: true
-      },
-      loadMarkets: async () => mockExchange.markets,
-      fetchBalance: async () => ({
-        USDT: { free: 10000, used: 0, total: 10000 },
-        BTC: { free: 1, used: 0, total: 1 }
-      }),
-      fetchTicker: async (symbol: string) => ({
-        symbol,
-        last: 50000, // Mock BTC price
-        bid: 49900,
-        ask: 50100
-      }),
-      createOrder: async (symbol: string, type: string, side: string, amount: number, price?: number, params = {}) => {
-        const orderId = 'test_order_' + Date.now();
-        return {
-          id: orderId,
-          symbol,
-          type,
-          side,
-          amount,
-          price: price || 50000,
-          status: 'closed',
-          filled: amount,
-          remaining: 0,
-          timestamp: Date.now(),
-          datetime: new Date().toISOString(),
-          lastTradeTimestamp: Date.now(),
-          cost: amount * (price || 50000),
-          average: price || 50000,
-          info: {}
-        };
-      },
-      fetchOrder: async (id: string, symbol: string) => {
-        return {
-          id,
-          symbol,
-          type: 'market',
-          side: 'buy',
-          amount: 0.1,
-          price: 50000,
-          status: 'closed',
-          filled: 0.1,
-          remaining: 0,
-          timestamp: Date.now(),
-          datetime: new Date().toISOString(),
-          lastTradeTimestamp: Date.now(),
-          cost: 5000,
-          average: 50000,
-          info: {}
-        };
-      }
-    };
-
-    // Use mock exchange instead of real one
-    const exchange = {
-      ...mockExchange,
-      createMarketOrder: (symbol: string, side: string, amount: number, price?: number, params = {}) => 
-        mockExchange.createOrder(symbol, 'market', side, amount, price, params)
-    } as unknown as ccxt.Exchange;
-
-    // Prepare order parameters
-    const market = signal.symbol.replace('USDT', '/USDT');
-    await validateMarket(exchange, market);
-
-    // Get current price if not provided
-    const ticker = await exchange.fetchTicker(market);
-    const entryPrice = signal.price || ticker.last;
-    if (!entryPrice) {
-      throw new Error('Could not determine entry price');
-    }
-
-    // Calculate order size
-    const orderSize = signal.position_size;
-    if (orderSize <= 0) {
-      throw new Error('Invalid order size');
-    }
-
-    // Execute the order
-    logger.info('Executing order', {
-      symbol: market,
-      side: signal.action.toLowerCase(),
-      size: orderSize
-    });
-
-    const order = await executeOrderWithRetry(
-      exchange,
-      market,
-      signal.action.toLowerCase() as 'buy' | 'sell',
-      orderSize
-    );
-
-    // Place stoploss if specified
-    let stoplossOrder = null;
-    if (signal.stoploss || signal.stoplossPercent) {
-      const stoplossPrice = await calculateStoplossPrice(signal, entryPrice);
-      if (stoplossPrice) {
-        const stoplossSide = signal.action === 'BUY' ? 'sell' : 'buy';
-        stoplossOrder = await placeStoplossOrder(
-          exchange,
-          market,
-          stoplossSide,
-          orderSize,
-          stoplossPrice
+      // Validate balance before trading
+      if (available < positionSize) {
+        throw new TradeError(
+          `Insufficient ${currency} balance. Required: ${positionSize}, Available: ${available}`,
+          'INSUFFICIENT_BALANCE'
         );
       }
+
+      // Prepare order parameters according to CCXT specs
+      const orderParams: any = {};
+
+      // Add stop loss if specified and supported
+      if (signal.stoplossPercent && exchange.has['stopLoss']) {
+        const multiplier = signal.action === 'BUY' ? 
+          (1 - signal.stoplossPercent/100) : 
+          (1 + signal.stoplossPercent/100);
+        
+        orderParams.stopLoss = {
+          stopPrice: price * multiplier, // This is the trigger price
+          type: 'market'  // Use market order for stop loss
+        };
+      }
+
+      // Execute the trade using CCXT unified API
+      const order = await exchange.createOrder(
+        signal.symbol,           // Unified CCXT market symbol
+        'market',               // Order type
+        signal.action.toLowerCase(),  // buy or sell
+        amount,                 // Amount in base currency
+        undefined,             // Price not needed for market orders
+        orderParams            // Additional parameters including stop loss
+      );
+
+      // Create trade record matching database schema
+      return {
+        user_id: bot.user_id,
+        external_id: order.id,
+        bot_id: bot.id,
+        symbol: signal.symbol,
+        side: signal.action,
+        status: 'OPEN',
+        size: order.amount,
+        price: order.price || order.average || price,
+        pnl: null
+      };
+
+    } catch (error: any) {
+      // Handle specific CCXT errors
+      if (error instanceof ccxt.InsufficientFunds) {
+        throw new TradeError('Insufficient funds for trade', 'INSUFFICIENT_FUNDS', error.message);
+      }
+      if (error instanceof ccxt.InvalidOrder) {
+        throw new TradeError('Invalid order parameters', 'INVALID_ORDER', error.message);
+      }
+      if (error instanceof ccxt.OrderNotFound) {
+        throw new TradeError('Order not found', 'ORDER_NOT_FOUND', error.message);
+      }
+      if (error instanceof ccxt.RateLimitExceeded) {
+        throw new TradeError('Rate limit exceeded', 'RATE_LIMIT', error.message);
+      }
+      if (error instanceof ccxt.NetworkError) {
+        throw new TradeError('Network error', 'NETWORK_ERROR', error.message);
+      }
+      throw error;
     }
-
-    // Create trade record
-    const trade: Omit<Trade, 'id' | 'created_at' | 'updated_at'> = {
-      external_id: order.id,
-      user_id: mockConfig.user_id,
-      bot_id: signal.bot_id,
-      symbol: signal.symbol,
-      side: signal.action as TradeSide,
-      price: entryPrice,
-      size: orderSize,
-      status: 'OPEN' as TradeStatus,
-      pnl: null
-    };
-
-    return trade;
   } catch (error: any) {
-    logger.tradingError('Failed to execute trade', error);
+    // Log error with details
+    logger.tradingError('execute_trade', error, {
+      botId: bot.id,
+      symbol: signal.symbol,
+      action: signal.action,
+      errorCode: error.code,
+      errorDetails: error.details
+    });
     throw error;
   }
 }

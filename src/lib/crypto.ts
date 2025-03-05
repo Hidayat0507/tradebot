@@ -1,5 +1,29 @@
 import { randomBytes } from 'crypto';
 
+// Constants
+const SECURE_SECRET_BYTES = 32;
+const BOT_ID_BYTES = 4;
+
+/**
+ * Generates a random hex string of specified length
+ */
+function generateRandomHex(bytes: number): string {
+  return randomBytes(bytes).toString('hex');
+}
+
+/**
+ * Generates a random hex string asynchronously
+ */
+async function generateRandomHexAsync(bytes: number): Promise<string> {
+  const buffer = await new Promise<Buffer>((resolve, reject) => {
+    randomBytes(bytes, (err, buf) => {
+      if (err) reject(err);
+      else resolve(buf);
+    });
+  });
+  return buffer.toString('hex');
+}
+
 // Function to generate a secure key for encryption
 export async function generateEncryptionKey(): Promise<CryptoKey> {
   const key = await window.crypto.subtle.generateKey(
@@ -65,13 +89,17 @@ export async function decryptData(encryptedData: string, key: CryptoKey): Promis
   return decoder.decode(decryptedData);
 }
 
-// Generate a webhook secret
+// Function to generate a secure random bot ID
+export function generateBotId(): string {
+  return generateRandomHex(BOT_ID_BYTES).toUpperCase();
+}
+
+// Function to generate a secure secret
 export async function generateSecureSecret(): Promise<string> {
-  // Generate 32 random bytes and convert to hex
-  return new Promise((resolve, reject) => {
-    randomBytes(32, (err, buffer) => {
-      if (err) reject(err);
-      resolve(buffer.toString('hex'));
-    });
-  });
+  return generateRandomHexAsync(SECURE_SECRET_BYTES);
+}
+
+// Generate a webhook secret synchronously
+export function generateSecureSecretSync(): string {
+  return generateRandomHex(SECURE_SECRET_BYTES);
 }

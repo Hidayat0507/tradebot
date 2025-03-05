@@ -5,19 +5,31 @@ import { useRouter, useParams } from "next/navigation"
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { WebhookSecretSection } from '@/components/bot/WebhookSecretSection';
 
 type Bot = {
   id: string
-  name: string
   user_id: string
+  name: string
   exchange: string
   pair: string
   max_position_size: number
-  stoploss_percentage: number | null
-  status: 'active' | 'paused' | 'stopped'
-  webhook_secret: string
+  stoploss_percentage?: number
+  enabled: boolean
+  api_key: string
+  api_secret: string
   created_at: string
   updated_at: string
+  webhook_secret: string
+}
+
+interface BotWithWebhookSecret extends Bot {
+  webhook_secret: string;
+}
+
+interface WebhookSecretSectionProps {
+  bot: BotWithWebhookSecret;
+  onSecretRegenerated: (newSecret: string) => void;
 }
 
 export default function BotDetailsPage() {
@@ -33,18 +45,23 @@ export default function BotDetailsPage() {
     const loadBot = async () => {
       try {
         setError(null)
+        console.log('Fetching bot with ID:', params.id);
+        
         const { data, error: loadError } = await supabase
           .from('bots')
           .select('*')
           .eq('id', params.id)
           .single()
 
-        if (loadError) throw loadError
-        if (!data) throw new Error('Bot not found')
-        
+        if (loadError) {
+          console.error('Error fetching bot:', loadError);
+          throw loadError
+        }
+
+        console.log('Fetched bot:', data);
         setBot(data)
       } catch (err: any) {
-        console.error('Error loading bot:', err)
+        console.error('Failed to fetch bot:', err)
         setError(err.message)
       } finally {
         setLoading(false)
@@ -121,11 +138,11 @@ export default function BotDetailsPage() {
                 <div className="flex justify-between items-center py-2">
                   <span className="text-gray-600 dark:text-gray-300">Status</span>
                   <span className={`px-2 py-1 text-sm font-medium rounded-full ${
-                    bot.status === 'active'
+                    bot.enabled
                       ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
                       : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                   }`}>
-                    {bot.status}
+                    {bot.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
               </div>
@@ -183,6 +200,14 @@ export default function BotDetailsPage() {
                 </div>
               </div>
             </Card>
+
+            <WebhookSecretSection 
+              bot={bot as BotWithWebhookSecret} 
+              onSecretRegenerated={(newSecret) => {
+                // Update bot state with new secret
+                setBot(prev => prev ? { ...prev, webhook_secret: newSecret } : null);
+              }} 
+            />
           </div>
         </div>
       </div>

@@ -1,82 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { Card } from "@/components/ui/card"
-import { createClient } from '@/utils/supabase/client'
-import ExchangeSetupTab from '@/app/bots/create/components/exchange-setup-tab'
-import BotSetupTab from '@/app/bots/create/components/bot-setup-tab'
 import ApiDocumentation from '@/app/bots/create/components/api-documentation'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CreateBotForm } from './components/create-bot-form'
 
 export default function CreateBotPage() {
-  const [activeTab, setActiveTab] = useState('exchange')
-  const [isExchangeValidated, setIsExchangeValidated] = useState(false)
-  const [exchangeConfig, setExchangeConfig] = useState({
-    exchange: 'binance',
-    apiKey: '',
-    apiSecret: '',
-  })
-  const supabase = createClient()
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        // Let middleware handle the redirect
-        return
-      }
-    }
-    checkUser()
-  }, [])
-
-  const handleExchangeValidated = (config: typeof exchangeConfig) => {
-    setExchangeConfig(config)
-    setIsExchangeValidated(true)
-    setActiveTab('bot')
-  }
-
   return (
-    <div className="page-background">
-      <div className="page-container">
-        <div className="page-content">
-          <div className="mb-8">
-            <h1 className="page-title font-bold text-3xl">Create Bot</h1>
-            <p className="page-subtitle text-lg text-gray-500 dark:text-gray-400">Configure your trading bot settings and start trading.</p>
+    <div className="container mx-auto py-10">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Create Bot</h2>
+            <p className="text-muted-foreground">Configure your trading bot settings and API credentials.</p>
           </div>
-
-          <div className="container mx-auto py-8">
-            <Card className="p-6">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger 
-                    value="exchange" 
-                    className="text-base"
-                    disabled={false}
-                  >
-                    Step 1: Exchange Setup
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="bot" 
-                    className="text-base"
-                    disabled={!isExchangeValidated}
-                  >
-                    Step 2: Bot Configuration
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="exchange" className="mt-6">
-                  <ExchangeSetupTab onValidated={handleExchangeValidated} />
-                </TabsContent>
-                <TabsContent value="bot" className="mt-6">
-                  <BotSetupTab exchangeConfig={exchangeConfig} />
-                </TabsContent>
-              </Tabs>
-            </Card>
-
-            {activeTab === 'bot' && (
-              <ApiDocumentation botId="QRVjvR3Y" />
-            )}
-          </div>
+          <Card className="p-6">
+            <CreateBotForm />
+          </Card>
         </div>
+        <ApiDocumentation />
       </div>
     </div>
   )
