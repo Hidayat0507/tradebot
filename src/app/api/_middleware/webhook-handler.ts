@@ -50,10 +50,22 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
       action: (value) => 
         ['BUY', 'SELL'].includes(value) || 
         'Invalid action (must be BUY or SELL)',
-      price: (value) => 
-        typeof value === 'undefined' || 
-        (typeof value === 'number' && value > 0) || 
-        'Price must be a positive number',
+      price: (value) => {
+        if (typeof value === 'undefined') return true;
+        
+        // Convert string prices to numbers
+        if (typeof value === 'string') {
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue) && numValue > 0) {
+            alert.price = numValue; // Update the alert with the numeric value
+            return true;
+          }
+          return 'Price must be a positive number';
+        }
+        
+        return (typeof value === 'number' && value > 0) || 
+          'Price must be a positive number';
+      },
       stoplossPercent: (value) => 
         typeof value === 'undefined' || 
         (typeof value === 'number' && value > 0 && value < 100) || 
@@ -77,6 +89,16 @@ export async function executeTrade(
   bot: BotData
 ) {
   try {
+    // Determine if we should create a limit order or market order
+    // If price is provided in the alert, use a limit order
+    const orderType = alert.price ? 'limit' : 'market';
+    
+    logger.info(`Creating ${orderType} order`, { 
+      symbol: alert.symbol, 
+      action: alert.action,
+      price: alert.price || price
+    });
+    
     // If direct amount is specified, use it instead of calculating from balance
     if (alert.amount && alert.amount > 0) {
       logger.info('Using direct amount specified in alert', { amount: alert.amount });
@@ -84,14 +106,13 @@ export async function executeTrade(
       // Check if this is Hyperliquid exchange
       const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
       
-      // For Hyperliquid, we need to include a price for market orders
       // Execute the trade with the specified amount
       const order = await exchange.createOrder(
         alert.symbol,
-        'market',
+        orderType,
         alert.action.toLowerCase(),
         alert.amount,
-        isHyperliquid ? price : undefined, // Include price for Hyperliquid
+        alert.price || (isHyperliquid ? price : undefined), // Use provided price for limit orders
         {
           ...(alert.stoplossPercent ? {
             stopLoss: {
@@ -118,13 +139,65 @@ export async function executeTrade(
     } else {
       // Real mode - fetch actual balance
       const balance = await exchange.fetchBalance();
+      
+      // Add detailed logging of the full balance object
+      logger.info('Raw balance from exchange', { exchangeId: exchange.id });
+      
+      // Parse the symbol carefully
+      const symbolParts = alert.symbol.split('/');
+      const baseCurrency = symbolParts[0]; // e.g., UBTC
+      const quoteCurrency = symbolParts[1]; // e.g., USDC
+      
+      logger.info('Symbol parsing', {
+        fullSymbol: alert.symbol,
+        parsedBaseCurrency: baseCurrency,
+        parsedQuoteCurrency: quoteCurrency
+      });
+      
       const currency = alert.action === 'BUY' ? 
-        alert.symbol.split('/')[1] : // Quote currency for buying
-        alert.symbol.split('/')[0];  // Base currency for selling
+        quoteCurrency : // Quote currency for buying
+        baseCurrency;  // Base currency for selling
       
-      available = balance[currency]?.free || 0;
+      logger.info('Currency determination', {
+        action: alert.action,
+        selectedCurrency: currency
+      });
       
-      logger.info('Available balance', { currency, available });
+      // Handle common currency variations (e.g., USDC might be listed as USDC.e)
+      const currencyVariations = getCurrencyVariations(currency);
+      let matchedCurrency = currency;
+      
+      // Search for any matching variation in the balance
+      for (const variation of currencyVariations) {
+        if (balance[variation] && balance[variation].free > 0) {
+          matchedCurrency = variation;
+          logger.info('Found currency variation in balance', {
+            originalCurrency: currency,
+            matchedVariation: variation,
+            availableBalance: balance[variation].free
+          });
+          break;
+        }
+      }
+      
+      // Check if currency exists in balance (using matched variation)
+      if (!balance[matchedCurrency]) {
+        logger.error('Currency not found in balance', { 
+          currency: matchedCurrency, 
+          originalCurrency: currency,
+          availableCurrencies: Object.keys(balance).filter(k => typeof balance[k] === 'object')
+        });
+        throw new ApiError(`Currency ${currency} not found in balance`, 400);
+      }
+      
+      available = balance[matchedCurrency]?.free || 0;
+      
+      logger.info('Available balance', { 
+        currency: matchedCurrency, 
+        available,
+        total: balance[matchedCurrency]?.total || 0,
+        used: balance[matchedCurrency]?.used || 0
+      });
     }
     
     // Use order_size from alert if provided, otherwise from bot config, or default to 100%
@@ -137,43 +210,38 @@ export async function executeTrade(
     
     positionSize = (available * percentage) / 100;
     const amount = positionSize / price;
+    
+    logger.info('Calculated order details', {
+      availableBalance: available,
+      percentage: percentage,
+      positionSizeInUSD: positionSize,
+      calculatedAmount: amount,
+      price: price,
+      orderValue: amount * price
+    });
 
-    // Add minimum order size check for Hyperliquid
+    // Handle minimum order size for Hyperliquid
     let finalAmount = amount;
     const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
     
+    // Enforce a fixed minimum amount for Hyperliquid - this is the simplest approach
+    // that works with their requirements
     if (isHyperliquid) {
-      // Calculate the order value in USD
-      const orderValue = amount * price;
+      // A fixed amount that should be large enough to meet Hyperliquid's minimum requirements
+      // but small enough to not waste funds
+      const MIN_AMOUNT = 0.0002; // Approximately $17-18 at current BTC prices
       
-      logger.info('Checking minimum order value for Hyperliquid', { 
-        orderValue,
-        minimumOrderValue: 10,
-        amount,
-        price
-      });
-      
-      // Hyperliquid requires a minimum order value of $10
-      if (orderValue < 10) {
-        logger.warn('Order value is too small for Hyperliquid, adjusting to minimum', { 
-          calculatedOrderValue: orderValue, 
-          minimumOrderValue: 10 
+      // Only use the minimum if calculated amount is smaller or zero
+      if (finalAmount <= 0 || finalAmount < MIN_AMOUNT) {
+        logger.warn('Using minimum viable order size for Hyperliquid', {
+          calculatedAmount: finalAmount,
+          minimumAmount: MIN_AMOUNT,
+          valueInUSD: MIN_AMOUNT * price
         });
-        
-        // Calculate the minimum amount based on the $10 minimum order value
-        finalAmount = 10 / price;
-        
-        // Add a small buffer to ensure we meet the minimum (10% extra)
-        finalAmount = finalAmount * 1.1;
-        
-        logger.info('Adjusted amount for minimum order size', {
-          originalAmount: amount,
-          adjustedAmount: finalAmount,
-          adjustedValue: finalAmount * price
-        });
+        finalAmount = MIN_AMOUNT;
       }
     }
-
+    
     // Execute the trade
     let order;
     if (SIMULATION_MODE) {
@@ -183,17 +251,17 @@ export async function executeTrade(
         id: orderId,
         datetime: new Date().toISOString(),
         timestamp: Date.now(),
-        status: 'closed',
+        status: orderType === 'limit' ? 'open' : 'closed',
         symbol: alert.symbol,
-        type: 'market',
+        type: orderType,
         side: alert.action.toLowerCase(),
-        price: price,
+        price: alert.price || price,
         amount: finalAmount,
-        filled: finalAmount,
-        remaining: 0,
-        cost: finalAmount * price,
+        filled: orderType === 'limit' ? 0 : finalAmount,
+        remaining: orderType === 'limit' ? finalAmount : 0,
+        cost: finalAmount * (alert.price || price),
         fee: {
-          cost: finalAmount * price * 0.001, // 0.1% fee
+          cost: finalAmount * (alert.price || price) * 0.001, // 0.1% fee
           currency: alert.symbol.split('/')[1]
         },
         info: {
@@ -203,14 +271,21 @@ export async function executeTrade(
       logger.info('Simulated order created', { order });
     } else {
       // Real order execution
-      const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
+      logger.info('Executing real order', {
+        symbol: alert.symbol,
+        type: orderType,
+        side: alert.action.toLowerCase(),
+        amount: finalAmount,
+        price: alert.price || (isHyperliquid ? price : undefined),
+        exchange: exchange.id
+      });
       
       order = await exchange.createOrder(
         alert.symbol,
-        'market',
+        orderType,
         alert.action.toLowerCase(),
         finalAmount,
-        isHyperliquid ? price : undefined, // Include price for Hyperliquid
+        alert.price || (isHyperliquid ? price : undefined), // Use provided price for limit orders
         {
           ...(alert.stoplossPercent ? {
             stopLoss: {
@@ -222,6 +297,13 @@ export async function executeTrade(
           ...(isHyperliquid ? { slippage: 0.05 } : {})
         }
       );
+      
+      logger.info('Order created successfully', {
+        orderId: order.id,
+        status: order.status,
+        filledAmount: order.filled,
+        cost: order.cost
+      });
     }
 
     return order;
@@ -243,6 +325,9 @@ export async function saveTrade(
   alert: TradingViewSignal,
   price: number
 ) {
+  // Ensure we have a valid size value from multiple possible sources
+  const orderSize = order.amount || order.filled || order.size || (alert.amount || 0);
+  
   const trade = {
     user_id: userId,
     external_id: order.id,
@@ -250,10 +335,19 @@ export async function saveTrade(
     symbol: alert.symbol,
     side: alert.action.toLowerCase(),
     status: 'filled',
-    size: order.amount,
+    size: orderSize,
     price: order.price || order.average || price,
     pnl: null
   };
+
+  // Log the size determination for debugging
+  logger.info('Trade size determination', {
+    orderAmount: order.amount,
+    orderFilled: order.filled,
+    orderSize: order.size,
+    alertAmount: alert.amount,
+    finalSize: orderSize
+  });
 
   logger.info('Saving trade to database', { trade });
 
@@ -340,10 +434,10 @@ export async function processWebhookAlert(
     logger.info('Using price for trade', { 
       price: tradePrice, 
       source: alert.price ? 'alert' : 'market',
-      marketPrice: ticker.last
+      market_price: ticker.last
     });
 
-    // Execute trade
+    // Execute the trade - pass isValidMarket as the market parameter
     const order = await executeTrade(exchange_client, alert, isValidMarket, tradePrice, bot);
 
     // Save trade to database
@@ -362,4 +456,20 @@ export async function processWebhookAlert(
     logger.error('Failed to process webhook alert', { error, alert });
     throw error;
   }
+}
+
+// Helper function to get common variations of currency names
+function getCurrencyVariations(currency: string): string[] {
+  const variations = [currency];
+  
+  // Add common variations
+  if (currency === 'USDC') {
+    variations.push('USDC.e', 'USDT', 'USD', 'USDH');
+  } else if (currency === 'UBTC') {
+    variations.push('BTC', 'WBTC', 'BTC-PERP', 'BTC-USDC-PERP');
+  } else if (currency === 'ETH') {
+    variations.push('WETH', 'ETH-PERP', 'ETH-USDC-PERP');
+  }
+  
+  return variations;
 } 

@@ -22,7 +22,7 @@ export interface TradingViewSignal {
   strategy?: string     // Default: ""
   stoplossPercent?: number  // Default: none
   amount?: number       // Optional direct amount for manual testing
-  order_size?: number // Optional percentage of available balance to use (25, 50, 75, or 100)
+  order_size?: number   // Optional percentage of available balance to use (25, 50, 75, or 100)
 }
 
 // Stats types
