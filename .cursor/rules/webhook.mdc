@@ -1,0 +1,68 @@
+---
+description: webhook testing rules.
+globs: 
+alwaysApply: false
+---
+## Webhook Testing Guide
+
+### Step 1: Test Webhook with a Buy Order  
+Run this command in your terminal:  
+```sh
+curl -X POST "http://localhost:3000/api/webhook" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "bot_id": "1F3D1863",
+       "symbol": "UBTC/USDC",
+       "action": "BUY",
+       "price": 82000,
+       "secret": "1656ffecc39a7b50f640d916e8f664361f8b718946395b71c81c38e752249ccb"
+     }'
+```
+If this works, proceed to the next step.
+
+### Step 2: Test Webhook with a Sell Order  
+Change `"action": "BUY"` to `"action": "SELL"`:
+```sh
+curl -X POST "http://localhost:3000/api/webhook" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "bot_id": "1F3D1863",
+       "symbol": "UBTC/USDC",
+       "action": "SELL",
+       "price": 82000,
+       "secret": "1656ffecc39a7b50f640d916e8f664361f8b718946395b71c81c38e752249ccb"
+     }'
+```
+If this works, move to the next step.
+
+### Step 3: Add `price` Field  
+Ensure `"price": 82000` is correctly passed in:
+```sh
+curl -X POST "http://localhost:3000/api/webhook" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "bot_id": "1F3D1863",
+       "symbol": "UBTC/USDC",
+       "action": "BUY",
+       "price": 82000,
+       "secret": "1656ffecc39a7b50f640d916e8f664361f8b718946395b71c81c38e752249ccb"
+     }'
+```
+If this works, repeat the test with `"action": "SELL"`.
+
+### Step 4: Add `order_size` Field  
+Modify the payload further:
+```sh
+curl -X POST "http://localhost:3000/api/webhook" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "bot_id": "1F3D1863",
+       "symbol": "UBTC/USDC",
+       "action": "BUY",
+       "price": 82000,
+       "order_size": 100,
+       "secret": "1656ffecc39a7b50f640d916e8f664361f8b718946395b71c81c38e752249ccb"
+     }'
+```
+If this works, test it with `"action": "SELL"`.
+

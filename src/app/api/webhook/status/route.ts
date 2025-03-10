@@ -1,19 +1,21 @@
 import { NextRequest } from 'next/server';
 import { successResponse } from '@/app/api/_middleware/api-handler';
-import { logger } from '@/lib/logging';
-
-// Get simulation mode from environment variable
-const SIMULATION_MODE = process.env.SIMULATION_MODE === 'true';
+import { createClient } from '@/utils/supabase/server';
 
 /**
- * Status endpoint to check if simulation mode is enabled
+ * Status endpoint to check if the webhook API is operational
  */
 export async function GET(request: NextRequest) {
-  logger.info('Status check requested');
+  // Initialize Supabase client
+  const supabase = await createClient(request);
   
+  // Get user session if available
+  const session = await supabase.auth.getSession();
+  const isAuthenticated = !!session?.data?.session;
+
   return successResponse({
-    status: 'ok',
-    simulation_mode: SIMULATION_MODE,
+    status: 'operational',
+    authenticated: isAuthenticated,
     server_time: new Date().toISOString()
   });
 } 
