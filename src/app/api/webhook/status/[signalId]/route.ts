@@ -9,10 +9,10 @@ import { logger } from '@/lib/logging';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { signalId: string } }
+  { params }: { params: Promise<{ signalId: string }> }
 ) {
   try {
-    const { signalId } = params;
+    const { signalId } = await params;
     
     if (!signalId) {
       throw new ApiError('Missing signal ID', 400);
