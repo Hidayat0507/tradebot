@@ -1,0 +1,13 @@
+# Development Rules
+
+## Testing Guidelines
+
+### File Organization
+1. All test files MUST be placed in the existing `src/test` directory
+2. DO NOT create new test directories
+3. Before creating any new files:
+   - Check the codebase for existing files with similar functionality
+   - Avoid creating duplicate or redundant files
+   - Reuse existing files when possible
+4. Follow the existing file structure and naming conventions
+
