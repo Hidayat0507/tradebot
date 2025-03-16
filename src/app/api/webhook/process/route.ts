@@ -9,6 +9,16 @@ import { createClient, createServiceClient } from '@/utils/supabase/server';
 import { logger } from '@/lib/logging';
 
 export async function POST(request: NextRequest) {
+  // TEMPORARILY DISABLED: Queue-based webhook system is not in use currently.
+  // All webhook processing is being handled by the original /api/webhook endpoint.
+  // To re-enable, uncomment the code below and remove this return statement.
+  return successResponse({
+    status: 'error',
+    message: 'This endpoint is temporarily disabled. Please use /api/webhook endpoint instead.',
+    disabled: true
+  });
+
+  /* Original implementation:
   try {
     const data = await request.json();
     const { signal_id } = data;
@@ -71,7 +81,7 @@ export async function POST(request: NextRequest) {
       // Get the full bot details needed for processing
       const { data: bot, error: botError } = await serviceClient
         .from('bots')
-        .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name')
+        .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
         .eq('id', signal.bot_id)
         .single();
         
@@ -86,10 +96,10 @@ export async function POST(request: NextRequest) {
         action: signal.payload.action
       });
       
-      // Add default order_size to the bot object
+      // Use the bot's max_position_size and any order_size from the webhook
       const botWithOrderSize = {
         ...bot,
-        order_size: 100 // Default to 100%
+        order_size: signal.payload.order_size || bot.max_position_size || 100 // Use webhook order_size, fallback to max_position_size, then 100%
       };
       
       // Process the webhook alert
@@ -148,4 +158,5 @@ export async function POST(request: NextRequest) {
     logger.error('Error in process endpoint', { error });
     return handleApiError(error);
   }
+  */
 } 

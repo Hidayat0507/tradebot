@@ -12,14 +12,19 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
 
   const alert = data as any;
 
+  // Convert action to lowercase if it exists
+  if (alert.action) {
+    alert.action = alert.action.toLowerCase();
+  }
+
   // Validate required fields and format
   validateFields(
     alert,
     ['bot_id', 'symbol', 'action', 'secret'],
     {
       action: (value) => 
-        ['BUY', 'SELL'].includes(value) || 
-        'Invalid action (must be BUY or SELL)',
+        ['buy', 'sell'].includes(value) || 
+        'Invalid action (must be buy or sell)',
       price: (value) => {
         // Convert string to number if needed
         const numValue = typeof value === 'string' ? parseFloat(value) : value;

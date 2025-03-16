@@ -1,7 +1,7 @@
 export interface WebhookAlert {
   bot_id: string;
   symbol: string;
-  action: 'BUY' | 'SELL';
+  action: 'buy' | 'sell';
   price?: number;
   strategy?: string;
   stoplossPercent?: number;

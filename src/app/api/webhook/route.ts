@@ -50,41 +50,33 @@ export async function POST(request: NextRequest) {
       console.log('No bots found in database:', listError);
     }
     
-    // Try exact match - REMOVED order_size from the query
-    console.log('Trying exact match with ID:', JSON.stringify(alert.bot_id));
+    // Try exact match first
+    logger.debug('Trying exact match with ID:', JSON.stringify(alert.bot_id));
     let { data: bot, error } = await serviceClient
       .from('bots')
-      .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name')
+      .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
       .eq('id', alert.bot_id)
       .single();
       
     if (error || !bot) {
-      console.log('No bot found with exact ID, error:', error);
-      
-      // Try with trimmed ID - REMOVED order_size from the query
+      // Try with trimmed ID
       const trimmedId = alert.bot_id.trim();
-      console.log('Trying with trimmed ID:', JSON.stringify(trimmedId));
+      logger.debug('Trying with trimmed ID:', JSON.stringify(trimmedId));
       
       ({ data: bot, error } = await serviceClient
         .from('bots')
-        .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name')
+        .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
         .eq('id', trimmedId)
         .single());
         
       if (error || !bot) {
-        console.log('No bot found with trimmed ID, error:', error);
-        
-        // Try case insensitive as last resort - REMOVED order_size from the query
-        console.log('Trying case-insensitive match as last resort');
+        // Try case insensitive as last resort
+        logger.debug('Trying case-insensitive match as last resort');
         ({ data: bot, error } = await serviceClient
           .from('bots')
-          .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name')
+          .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
           .ilike('id', alert.bot_id)
           .single());
-          
-        if (error || !bot) {
-          console.log('No bot found with case-insensitive ID, error:', error);
-        }
       }
     }
 
@@ -113,10 +105,10 @@ export async function POST(request: NextRequest) {
 
     console.log('Webhook secret verified, processing alert');
 
-    // Add default order_size to the bot object since it doesn't exist in the database
+    // Use order_size from webhook or max_position_size from bot config
     const botWithOrderSize = {
       ...bot,
-      order_size: 100 // Default to 100%
+      order_size: alert.order_size || bot.max_position_size || 100 // Use webhook order_size, fallback to max_position_size, then 100%
     };
 
     // Process the webhook alert

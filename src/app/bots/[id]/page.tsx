@@ -180,7 +180,7 @@ export default function BotDetailsPage() {
   // Required fields
   "bot_id": "${bot.id}",
   "symbol": "${bot.pair}",
-  "action": "BUY",  // or "SELL"
+  "action": "buy",  // or "sell"
 
   // Optional fields
   "price": {{close}},        // Default: market price
@@ -193,7 +193,7 @@ export default function BotDetailsPage() {
                       <ul className="list-disc list-inside space-y-1 ml-2">
                         <li><code className="text-gray-900 dark:text-gray-200">bot_id</code>: Your bot's unique identifier</li>
                         <li><code className="text-gray-900 dark:text-gray-200">symbol</code>: Trading pair (e.g., BTC/USDT)</li>
-                        <li><code className="text-gray-900 dark:text-gray-200">action</code>: Must be either "BUY" or "SELL"</li>
+                        <li><code className="text-gray-900 dark:text-gray-200">action</code>: Must be either "buy" or "sell" (case-insensitive)</li>
                       </ul>
                     </div>
                   </div>

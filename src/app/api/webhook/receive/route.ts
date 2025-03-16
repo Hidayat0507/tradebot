@@ -9,6 +9,16 @@ import { createClient, createServiceClient } from '@/utils/supabase/server';
 import { logger } from '@/lib/logging';
 
 export async function POST(request: NextRequest) {
+  // TEMPORARILY DISABLED: Queue-based webhook system is not in use currently.
+  // All webhook processing is being handled by the original /api/webhook endpoint.
+  // To re-enable, uncomment the code below and remove this return statement.
+  return successResponse({
+    status: 'error',
+    message: 'This endpoint is temporarily disabled. Please use /api/webhook endpoint instead.',
+    disabled: true
+  });
+
+  /* Original implementation:
   const startTime = Date.now();
   
   try {
@@ -125,4 +135,5 @@ export async function POST(request: NextRequest) {
     logger.error('Failed to validate webhook', error);
     return handleApiError(error);
   }
+  */
 } 

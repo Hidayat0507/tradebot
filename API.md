@@ -38,7 +38,7 @@ All requests to the webhook API must include the bot's webhook secret for authen
 |-----------|------|-------------|
 | `bot_id` | string | Your bot's unique identifier |
 | `symbol` | string | Trading pair in exchange format (e.g., "BTC/USDC:USDC" for Hyperliquid) |
-| `action` | string | Must be "BUY" or "SELL" (case-sensitive) |
+| `action` | string | Must be "buy" or "sell" (case-insensitive) |
 | `secret` | string | Your webhook secret for authentication |
 
 ### Trade Size Parameters

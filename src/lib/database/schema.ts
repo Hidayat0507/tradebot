@@ -1,6 +1,6 @@
 // Base types that represent our database enums
 export type SupportedExchange = 'binance' | 'hyperliquid'
-export type TradeSide = 'BUY' | 'SELL'
+export type TradeSide = 'buy' | 'sell'
 export type TradeStatus = 'OPEN' | 'CLOSED' | 'CANCELLED'
 
 export type Json =

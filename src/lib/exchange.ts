@@ -53,7 +53,7 @@ export async function executeTrade(signal: TradingViewSignal, bot: Bot): Promise
 
       // Get available balance
       const balance = await exchange.fetchBalance();
-      const currency = signal.action === 'BUY' ? 
+      const currency = signal.action === 'buy' ? 
         signal.symbol.split('/')[1] : // Quote currency for buying
         signal.symbol.split('/')[0];  // Base currency for selling
       
@@ -96,7 +96,7 @@ export async function executeTrade(signal: TradingViewSignal, bot: Bot): Promise
 
       // Add stop loss if specified and supported
       if (signal.stoplossPercent && exchange.has['stopLoss']) {
-        const multiplier = signal.action === 'BUY' ? 
+        const multiplier = signal.action === 'buy' ? 
           (1 - signal.stoplossPercent/100) : 
           (1 + signal.stoplossPercent/100);
         

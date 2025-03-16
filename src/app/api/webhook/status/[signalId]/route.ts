@@ -9,10 +9,20 @@ import { logger } from '@/lib/logging';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ signalId: string }> }
+  { params }: { params: { signalId: string } }
 ) {
+  // TEMPORARILY DISABLED: Queue-based webhook system is not in use currently.
+  // All webhook processing is being handled by the original /api/webhook endpoint.
+  // To re-enable, uncomment the code below and remove this return statement.
+  return successResponse({
+    status: 'error',
+    message: 'This endpoint is temporarily disabled. Please use /api/webhook endpoint instead.',
+    disabled: true
+  });
+
+  /* Original implementation:
   try {
-    const { signalId } = await params;
+    const { signalId } = params;
     
     if (!signalId) {
       throw new ApiError('Missing signal ID', 400);
@@ -57,4 +67,5 @@ export async function GET(
     logger.error('Error checking signal status', { error });
     return handleApiError(error);
   }
+  */
 } 

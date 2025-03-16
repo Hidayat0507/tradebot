@@ -57,9 +57,11 @@ export function validateSignal(data: unknown): TradingViewSignal {
     }
 
     // Validate action
-    if (signal.action !== 'BUY' && signal.action !== 'SELL') {
-      throw new SignalValidationError('Action must be BUY or SELL');
+    const normalizedAction = signal.action.toLowerCase();
+    if (normalizedAction !== 'buy' && normalizedAction !== 'sell') {
+      throw new SignalValidationError('Action must be buy or sell');
     }
+    signal.action = normalizedAction;
 
     // Validate symbol format (basic check)
     if (!/^[A-Z]+$/.test(signal.symbol.replace(/USDT$/, ''))) {
