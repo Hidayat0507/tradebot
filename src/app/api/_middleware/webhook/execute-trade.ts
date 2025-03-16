@@ -70,7 +70,7 @@ async function calculateTradeAmount(
   const marketType = isSpot ? 'spot' : 'swap';
   
   // For Hyperliquid BUY orders, use USDC; for SELL orders, use BTC
-  let currency = alert.action === 'BUY' ? 
+  let currency = alert.action === 'buy' ? 
     'USDC' : // For buying, always use USDC balance
     (isHyperliquid ? 'UBTC' : 'BTC');   // For selling, use UBTC for Hyperliquid, BTC for others
     
@@ -161,7 +161,7 @@ async function calculateTradeAmount(
   
   // For Hyperliquid BUY orders, convert from USDC to the asset amount
   let amount = positionSize;
-  if (isHyperliquid && alert.action === 'BUY') {
+  if (isHyperliquid && alert.action === 'buy') {
     // Calculate how much of the asset we can buy with our USDC
     amount = positionSize / price;
     logger.info('Converted USDC to asset amount', {
