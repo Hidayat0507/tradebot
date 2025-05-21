@@ -27,10 +27,10 @@ interface CacheConfig {
 
 // Default cache configuration
 const DEFAULT_CONFIG: CacheConfig = {
-  defaultTtl: 5000, // 5 seconds
+  defaultTtl: 20000, // 20 seconds
   ttls: {
-    ticker: 5000,    // 5 seconds for price data
-    orderBook: 5000, // 5 seconds for order book
+    ticker: 20000,    // 20 seconds for price data
+    orderBook: 20000, // 20 seconds for order book
     ohlcv: 60000,    // 1 minute for OHLCV data (changes less frequently)
   }
 };
