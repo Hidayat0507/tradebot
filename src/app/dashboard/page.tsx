@@ -133,7 +133,7 @@ export default function DashboardPage() {
       const formattedDbTrades = (dbTrades || []).map(trade => ({
         id: trade.id,
         botId: trade.bot_id,
-        botName: trade.bots ? trade.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot',
+        botName: trade.bots ? (trade.bots as any).name || 'Unknown Bot' : 'Unknown Bot',
         symbol: trade.symbol,
         side: trade.side,
         status: trade.status,
@@ -150,7 +150,7 @@ export default function DashboardPage() {
         return {
           id: trade.id || log.id,
           botId: trade.bot_id || log.bot_id,
-          botName: log.details.botName || (log.bots && Array.isArray(log.bots) && log.bots[0]?.name ? log.bots[0].name : 'Unknown Bot'),
+          botName: log.details.botName || (log.bots && Array.isArray(log.bots) && log.bots.length > 0 ? log.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot'),
           symbol: trade.symbol,
           side: trade.side,
           status: trade.status,

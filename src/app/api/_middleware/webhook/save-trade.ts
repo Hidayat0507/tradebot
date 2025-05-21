@@ -14,6 +14,28 @@ export async function saveTrade(
   price: number,
   calculatedAmount?: number  // Add calculated amount as backup
 ) {
+  let pnl = null;
+  // If this is a sell order, calculate PnL from the most recent buy trade
+  if (alert.action.toLowerCase() === 'sell') {
+    // Fetch the most recent buy trade for this bot and symbol
+    const { data: lastBuyTrade, error: fetchError } = await supabase
+      .from('trades')
+      .select('price, size')
+      .eq('bot_id', botId)
+      .eq('symbol', alert.symbol)
+      .eq('side', 'buy')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (!fetchError && lastBuyTrade) {
+      // Calculate PnL: (Sell Price - Buy Price) * Sell Size
+      const sellPrice = order.price || order.average || price;
+      const buyPrice = lastBuyTrade.price;
+      const sellSize = order.amount || calculatedAmount;
+      pnl = (sellPrice - buyPrice) * sellSize;
+    }
+  }
+
   const trade = {
     user_id: userId,
     external_id: order.id,
@@ -23,7 +45,7 @@ export async function saveTrade(
     status: 'filled',
     size: order.amount || calculatedAmount,  // Use calculated amount as fallback
     price: order.price || order.average || price,
-    pnl: null
+    pnl: pnl
   };
 
   logger.info('Saving trade to database', { 

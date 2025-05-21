@@ -38,18 +38,14 @@ interface MarketData {
   }[]
 }
 
-// Predefined list of symbols to track - using Binance and Bitget
+// Predefined list of symbols to track - using Bitget
 const DEFAULT_SYMBOLS = [
-  { exchange: 'binance', symbol: 'BTC/USDT' },
-  { exchange: 'binance', symbol: 'ETH/USDT' },
-  { exchange: 'binance', symbol: 'BNB/USDT' },
-  { exchange: 'binance', symbol: 'SOL/USDT' },
-  { exchange: 'binance', symbol: 'XRP/USDT' },
   { exchange: 'bitget', symbol: 'BTC/USDT' },
   { exchange: 'bitget', symbol: 'ETH/USDT' },
   { exchange: 'bitget', symbol: 'BNB/USDT' },
   { exchange: 'bitget', symbol: 'SOL/USDT' },
   { exchange: 'bitget', symbol: 'XRP/USDT' },
+  { exchange: 'bitget', symbol: 'ADA/USDT' },
 ]
 
 export default function MarketOverview() {
@@ -86,8 +82,12 @@ export default function MarketOverview() {
           )
           .map(result => result.value)
 
-        setMarketData(validData)
-        setError(null)
+        // Since we are only fetching from Bitget, no need for unique map logic
+        // Take the top 6 symbols
+        const top6MarketData = validData.slice(0, 6);
+
+        setMarketData(top6MarketData);
+        setError(null);
       } catch (err) {
         setError('Failed to load market data')
         console.error(err)
@@ -151,7 +151,7 @@ export default function MarketOverview() {
               <TableRow key={index}>
                 <TableCell>
                   <Badge variant="secondary">
-                    {market?.exchange?.toUpperCase() || 'Binance'}
+                    {market?.exchange?.toUpperCase() || 'Bitget'}
                   </Badge>
                 </TableCell>
                 <TableCell>{market?.symbol || 'N/A'}</TableCell>

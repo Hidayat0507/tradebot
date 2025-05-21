@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
 
 export type TradeEntry = {
   id: string
@@ -36,13 +36,18 @@ interface TradesTableProps {
 
 export default function TradesTable({ trades, isLoading, onRefresh }: TradesTableProps) {
   const [filterText, setFilterText] = useState('')
-  
+  const [page, setPage] = useState(1)
+  const pageSize = 6
+
   const filteredTrades = trades.filter(trade => 
     trade.symbol.toLowerCase().includes(filterText.toLowerCase()) ||
     trade.side.toLowerCase().includes(filterText.toLowerCase()) ||
     trade.status.toLowerCase().includes(filterText.toLowerCase()) ||
     (trade.botName && trade.botName.toLowerCase().includes(filterText.toLowerCase()))
   )
+
+  const totalPages = Math.ceil(filteredTrades.length / pageSize)
+  const paginatedTrades = filteredTrades.slice((page - 1) * pageSize, page * pageSize)
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -124,14 +129,14 @@ export default function TradesTable({ trades, isLoading, onRefresh }: TradesTabl
                   Loading trades...
                 </TableCell>
               </TableRow>
-            ) : filteredTrades.length === 0 ? (
+            ) : paginatedTrades.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="h-24 text-center">
                   No trades found
                 </TableCell>
               </TableRow>
             ) : (
-              filteredTrades.map((trade) => (
+              paginatedTrades.map((trade) => (
                 <TableRow key={trade.id}>
                   <TableCell className="font-medium">
                     {trade.botName || trade.botId}
@@ -168,6 +173,30 @@ export default function TradesTable({ trades, isLoading, onRefresh }: TradesTabl
           </TableBody>
         </Table>
       </div>
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-4">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setPage(page - 1)} 
+            disabled={page === 1}
+            aria-label="Previous Page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-sm">Page {page} of {totalPages}</span>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setPage(page + 1)} 
+            disabled={page === totalPages}
+            aria-label="Next Page"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 } 
