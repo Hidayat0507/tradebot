@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const botSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  exchange: z.enum(['binance', 'hyperliquid']),
+  exchange: z.enum(['binance', 'hyperliquid', 'bitget']),
   pair: z.string().min(1, 'Trading pair is required'),
   max_position_size: z.number().positive('Position size must be positive'),
   stoploss_percentage: z.number().optional(),

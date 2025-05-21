@@ -19,6 +19,7 @@ import { randomBytes } from 'crypto'
 const SUPPORTED_EXCHANGES = [
   { id: 'binance', name: 'Binance' },
   { id: 'hyperliquid', name: 'Hyperliquid' },
+  { id: 'bitget', name: 'Bitget' },
 ] as const
 
 const TRADING_PAIRS = [
@@ -41,7 +42,7 @@ const TRADING_PAIRS = [
 
 const createBotFormSchema = z.object({
   name: z.string().min(3, 'Bot name must be at least 3 characters'),
-  exchange: z.enum(['binance', 'hyperliquid'] as const),
+  exchange: z.enum(['binance', 'hyperliquid', 'bitget'] as const),
   pair: z.string().min(1, 'Trading pair is required'),
   max_position_size: z.number()
     .min(0.0001, 'Position size must be at least 0.0001')

@@ -114,8 +114,8 @@ export function validateBotData(data: any) {
     ['name', 'exchange', 'pair'],
     {
       exchange: (value) => 
-        ['binance', 'hyperliquid'].includes(value) || 
-        'Invalid exchange. Must be binance or hyperliquid'
+        ['binance', 'hyperliquid', 'bitget'].includes(value) || 
+        'Invalid exchange. Must be binance, hyperliquid, or bitget'
     }
   );
 }

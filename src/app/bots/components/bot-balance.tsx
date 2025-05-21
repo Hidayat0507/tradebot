@@ -270,15 +270,6 @@ export function BotBalance({ botId }: BotBalanceProps) {
             )}
           </div>
         </div>
-        <Button 
-          onClick={refreshBalance} 
-          variant="secondary" 
-          size="sm"
-          className="h-7 px-2 text-xs"
-        >
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Retry
-        </Button>
       </div>
     )
   }
@@ -299,14 +290,6 @@ export function BotBalance({ botId }: BotBalanceProps) {
           <span>$0.00</span>
         </div>
         <div className="pt-1 flex items-center gap-2">
-          <Button 
-            onClick={refreshBalance} 
-            variant="ghost" 
-            size="sm"
-            className="h-6 w-6 p-0"
-          >
-            <RefreshCw className="h-3 w-3" />
-          </Button>
           <span className="text-xs text-gray-400">No balance data</span>
         </div>
       </div>
@@ -342,17 +325,6 @@ export function BotBalance({ botId }: BotBalanceProps) {
           <span>{data.total.toFixed(4)}</span>
         </div>
       ))}
-      
-      <div className="pt-1">
-        <Button 
-          onClick={refreshBalance} 
-          variant="ghost" 
-          size="sm"
-          className="h-6 w-6 p-0"
-        >
-          <RefreshCw className="h-3 w-3" />
-        </Button>
-      </div>
     </div>
   )
 }

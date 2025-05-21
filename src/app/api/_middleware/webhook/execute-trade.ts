@@ -69,11 +69,15 @@ async function calculateTradeAmount(
   const isSpot = alert.symbol.includes('/');
   const marketType = isSpot ? 'spot' : 'swap';
   
-  // For Hyperliquid BUY orders, use USDC; for SELL orders, use BTC
-  let currency = alert.action === 'buy' ? 
-    'USDC' : // For buying, always use USDC balance
-    (isHyperliquid ? 'UBTC' : 'BTC');   // For selling, use UBTC for Hyperliquid, BTC for others
-    
+  // For Hyperliquid BUY orders, use USDC; for SELL orders, use the base asset from the symbol
+  let currency;
+  if (alert.action === 'buy') {
+    currency = 'USDC'; // Always use quote asset for buy
+  } else {
+    // For sell, use the base asset from the symbol (e.g., 'UETH' from 'UETH/USDC')
+    currency = alert.symbol.split('/')[0];
+  }
+  
   logger.info('Starting balance calculation', {
     action: alert.action,
     currency,

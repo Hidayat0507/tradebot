@@ -55,7 +55,7 @@ export async function getBotWithCredentials(
   }
 
   // Validate exchange type
-  if (!['binance', 'hyperliquid'].includes(data.exchange)) {
+  if (!['binance', 'hyperliquid', 'bitget'].includes(data.exchange)) {
     throw new ExchangeError(`Invalid exchange type: ${data.exchange}`, 400);
   }
 
@@ -73,11 +73,21 @@ export async function getBotWithCredentials(
  * Create exchange client with proper configuration
  */
 export async function createExchangeClientFromBot(bot: BotWithCredentials) {
-  if (!['binance', 'hyperliquid'].includes(bot.exchange)) {
+  if (!['binance', 'hyperliquid', 'bitget'].includes(bot.exchange)) {
     throw new ExchangeError(`Unsupported exchange: ${bot.exchange}`, 400);
   }
 
-  const exchangeClass = bot.exchange === 'binance' ? ccxt.binance : ccxt.hyperliquid;
+  let exchangeClass;
+  if (bot.exchange === 'binance') {
+    exchangeClass = ccxt.binance;
+  } else if (bot.exchange === 'hyperliquid') {
+    exchangeClass = ccxt.hyperliquid;
+  } else if (bot.exchange === 'bitget') {
+    exchangeClass = ccxt.bitget;
+  }
+  if (!exchangeClass) {
+    throw new ExchangeError(`Unsupported exchange: ${bot.exchange}`, 400);
+  }
   const exchange = new exchangeClass({
     apiKey: bot.api_key,
     secret: bot.api_secret ? decrypt(bot.api_secret) : '',

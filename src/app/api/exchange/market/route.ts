@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
       return successResponse([])
     }
 
-    // Fetch market data for each bot (only Binance)
+    // Fetch market data for each bot (only Binance and Bitget)
     const marketDataPromises = bots
-      .filter(bot => bot.exchange.toLowerCase() === 'binance')
+      .filter(bot => ['binance', 'bitget'].includes(bot.exchange.toLowerCase()))
       .map(async (bot) => {
         try {
           const exchange_client = await createExchangeClient(bot.exchange, undefined, 'market_data')
@@ -78,12 +78,12 @@ export async function POST(request: NextRequest) {
     
     const { exchange, symbol } = payload
     
-    // Only allow Binance exchange
-    if (exchange.toLowerCase() !== 'binance') {
-      logger.info('Rejecting non-Binance market data request', { exchange, symbol })
+    // Only allow Binance and Bitget exchange
+    if (!['binance', 'bitget'].includes(exchange.toLowerCase())) {
+      logger.info('Rejecting non-Binance/Bitget market data request', { exchange, symbol })
       return successResponse({
         error: true,
-        message: "Only Binance exchange is supported for market data requests.",
+        message: "Only Binance and Bitget exchanges are supported for market data requests.",
         symbol,
         exchange
       })

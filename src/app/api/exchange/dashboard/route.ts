@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
           dashboardData.totalPnL += pnl.reduce((total: number, income: any) => 
             total + parseFloat(income.income), 0);
         }
+        // Bitget: Add custom PnL logic here if needed
 
         // Fetch trades
         const trades = await (exchange as Exchange).fetchMyTrades(undefined, undefined, 10);

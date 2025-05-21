@@ -7,7 +7,8 @@ import { decrypt } from '@/utils/encryption';
 // Map of supported exchanges to their CCXT classes
 const exchangeClasses: Record<SupportedExchange, typeof ccxt.Exchange> = {
   binance: ccxt.binance,
-  hyperliquid: ccxt.hyperliquid
+  hyperliquid: ccxt.hyperliquid,
+  bitget: ccxt.bitget
 };
 
 export class TradeError extends Error {

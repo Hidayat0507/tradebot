@@ -38,13 +38,18 @@ interface MarketData {
   }[]
 }
 
-// Predefined list of symbols to track - only using Binance
+// Predefined list of symbols to track - using Binance and Bitget
 const DEFAULT_SYMBOLS = [
   { exchange: 'binance', symbol: 'BTC/USDT' },
   { exchange: 'binance', symbol: 'ETH/USDT' },
   { exchange: 'binance', symbol: 'BNB/USDT' },
   { exchange: 'binance', symbol: 'SOL/USDT' },
   { exchange: 'binance', symbol: 'XRP/USDT' },
+  { exchange: 'bitget', symbol: 'BTC/USDT' },
+  { exchange: 'bitget', symbol: 'ETH/USDT' },
+  { exchange: 'bitget', symbol: 'BNB/USDT' },
+  { exchange: 'bitget', symbol: 'SOL/USDT' },
+  { exchange: 'bitget', symbol: 'XRP/USDT' },
 ]
 
 export default function MarketOverview() {

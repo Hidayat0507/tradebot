@@ -59,6 +59,8 @@ const getExchangeOptions = async (exchange: string, credentials?: ExchangeCreden
     switch (exchange.toLowerCase()) {
       case 'binance':
         return baseOptions;
+      case 'bitget':
+        return baseOptions;
       case 'hyperliquid':
         // For Hyperliquid, we need to set the walletAddress and privateKey
         // The apiKey is used as the walletAddress, and the secret is used as the privateKey
@@ -107,6 +109,9 @@ export const createExchangeClient = async (exchange: string, credentials?: Excha
     switch (exchange.toLowerCase()) {
       case 'binance':
         client = new ccxt.binance(options);
+        break;
+      case 'bitget':
+        client = new ccxt.bitget(options);
         break;
       case 'hyperliquid':
         client = new ccxt.hyperliquid(options);
