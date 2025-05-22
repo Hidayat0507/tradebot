@@ -4,6 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BotBalance } from '@/app/bots/components/bot-balance';
 import { createClient } from '@/utils/supabase/client';
+import { Pie } from 'react-chartjs-2';
+import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
+import ExchangePieChart from './components/exchange-pie-chart';
+Chart.register(ArcElement, Tooltip, Legend);
 
 interface Bot {
   id: string;
@@ -37,6 +41,13 @@ export default function AssetsPage() {
     fetchBots();
   }, [supabase]);
 
+  // Group bots by exchange
+  const exchangeGroups = bots.reduce((acc, bot) => {
+    if (!acc[bot.exchange]) acc[bot.exchange] = [];
+    acc[bot.exchange].push(bot);
+    return acc;
+  }, {} as Record<string, Bot[]>);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -55,30 +66,33 @@ export default function AssetsPage() {
             ) : bots.length === 0 ? (
               <div>No bots found.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Bot Name</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Exchange</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Pair</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                    {bots.map(bot => (
-                      <tr key={bot.id}>
-                        <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{bot.name}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{bot.exchange}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{bot.pair}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                          <BotBalance botId={bot.id} />
-                        </td>
+              <>
+                <ExchangePieChart />
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Bot Name</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Exchange</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Pair</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Balance</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                      {bots.map(bot => (
+                        <tr key={bot.id}>
+                          <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{bot.name}</td>
+                          <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{bot.exchange}</td>
+                          <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{bot.pair}</td>
+                          <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                            <BotBalance botId={bot.id} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
