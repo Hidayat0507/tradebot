@@ -1,16 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Pie } from 'react-chartjs-2';
 import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
-import * as ccxt from 'ccxt';
-import { createClient } from '@/utils/supabase/client';
 Chart.register(ArcElement, Tooltip, Legend);
 
-interface Bot {
+interface BotForChart {
   id: string;
   name: string;
   exchange: string;
-  api_key: string;
-  api_secret: string;
 }
 
 interface AssetBalance {
@@ -21,66 +17,52 @@ interface ExchangeBalances {
   [exchange: string]: AssetBalance;
 }
 
-export default function ExchangePieChart() {
+export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
   const [exchangeBalances, setExchangeBalances] = useState<ExchangeBalances>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
 
   useEffect(() => {
     async function fetchAllBalances() {
       setLoading(true);
       setError(null);
       try {
-        // Fetch all bots with credentials
-        const { data: bots, error: botsError } = await supabase
-          .from('bots')
-          .select('id, name, exchange, api_key, api_secret');
-        if (botsError) throw botsError;
-        if (!bots) return;
-
-        // Group bots by exchange
-        const grouped: Record<string, Bot[]> = {};
-        bots.forEach((bot: Bot) => {
+        // Group incoming bots by exchange
+        const grouped: Record<string, BotForChart[]> = {};
+        bots.forEach((bot) => {
           if (!grouped[bot.exchange]) grouped[bot.exchange] = [];
           grouped[bot.exchange].push(bot);
         });
 
-        // For each exchange, fetch and aggregate balances
+        // For each exchange, fetch and aggregate balances using the server API per bot
         const balances: ExchangeBalances = {};
-        for (const [exchange, bots] of Object.entries(grouped)) {
+        for (const [exchange, botsInExchange] of Object.entries(grouped)) {
           const assetTotals: AssetBalance = {};
-          for (const bot of bots) {
-            try {
-              const ExchangeClass = (ccxt as any)[exchange.toLowerCase()];
-              if (!ExchangeClass) continue;
-              const exchangeInstance = new ExchangeClass({
-                apiKey: bot.api_key,
-                secret: bot.api_secret,
-              });
-              let rawBalance;
+          await Promise.all(
+            botsInExchange.map(async (bot) => {
               try {
-                rawBalance = await exchangeInstance.fetchBalance();
-              } catch {
-                // Try with spot type if normal fails
-                try {
-                  rawBalance = await exchangeInstance.fetchBalance({ type: 'spot' });
-                } catch {
-                  continue;
-                }
-              }
-              if (rawBalance && rawBalance.total) {
-                for (const [asset, amount] of Object.entries(rawBalance.total)) {
+                const res = await fetch(`/api/exchange/balance?botId=${encodeURIComponent(bot.id)}`, {
+                  method: 'GET',
+                  cache: 'no-store',
+                });
+                if (!res.ok) return;
+                const payload = await res.json();
+                const balanceData = payload?.data?.balance as {
+                  total?: Record<string, number>
+                } | undefined;
+                if (!balanceData || !balanceData.total) return;
+                for (const [asset, amount] of Object.entries(balanceData.total)) {
                   if (!amount || typeof amount !== 'number' || amount <= 0) continue;
                   assetTotals[asset] = (assetTotals[asset] || 0) + amount;
                 }
+              } catch {
+                // ignore this bot on error
               }
-            } catch {
-              continue;
-            }
-          }
+            })
+          );
           balances[exchange] = assetTotals;
         }
+
         setExchangeBalances(balances);
       } catch (err: any) {
         setError(err.message || 'Failed to fetch balances');
@@ -89,7 +71,7 @@ export default function ExchangePieChart() {
       }
     }
     fetchAllBalances();
-  }, [supabase]);
+  }, [bots]);
 
   if (loading) return <div>Loading exchange balances...</div>;
   if (error) return <div className="text-red-500">{error}</div>;

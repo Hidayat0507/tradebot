@@ -3,7 +3,9 @@ import { ApiError } from '../api-handler';
 import { createExchangeClient, validateMarket } from '../exchange-middleware';
 import { logger, normalizeError } from '@/lib/logging';
 import { marketCache } from '@/lib/market-cache';
-import * as ccxt from 'ccxt';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/database/schema';
+import type { TickerResult } from '@/types/exchange';
 import { BotData } from './execute-trade';
 import { executeTrade } from './execute-trade';
 import { saveTrade } from './save-trade';
@@ -14,7 +16,7 @@ import { saveTrade } from './save-trade';
 export async function processWebhookAlert(
   alert: TradingViewSignal,
   bot: BotData,
-  supabase: any
+  supabase: SupabaseClient<Database>
 ) {
   try {
     // Create exchange client with proper credentials
@@ -31,8 +33,8 @@ export async function processWebhookAlert(
     }
     
     // Try to get ticker from cache first
-    let ticker: ccxt.Ticker;
-    const cachedTicker = marketCache.get<ccxt.Ticker>(exchange_client.id, alert.symbol, 'ticker');
+    let ticker: TickerResult;
+    const cachedTicker = marketCache.get<TickerResult>(exchange_client.id, alert.symbol, 'ticker');
     
     if (cachedTicker) {
       logger.info('Using cached ticker for trade price', { 
@@ -65,7 +67,7 @@ export async function processWebhookAlert(
     });
 
     // Execute trade
-    const { order, calculatedAmount } = await executeTrade(exchange_client, alert, isValidMarket, tradePrice, bot);
+    const { order, calculatedAmount } = await executeTrade(exchange_client, alert, tradePrice, bot);
 
     // Save trade to database
     const trade = await saveTrade(supabase, bot.user_id, bot.id, order, alert, tradePrice, calculatedAmount);

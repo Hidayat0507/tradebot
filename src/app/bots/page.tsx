@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
@@ -27,11 +27,13 @@ export default function BotsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadBots()
+  const handleError = useCallback((err: unknown) => {
+    console.error('Bots operation failed:', err)
+    const message = err instanceof Error ? err.message : 'Unexpected error'
+    setError(message)
   }, [])
 
-  async function loadBots() {
+  const loadBots = useCallback(async () => {
     try {
       setError(null)
       const { data, error: loadError } = await supabase
@@ -41,13 +43,16 @@ export default function BotsPage() {
 
       if (loadError) throw loadError
       setBots(data || [])
-    } catch (err: any) {
-      console.error('Error loading bots:', err)
-      setError(err.message)
+    } catch (err) {
+      handleError(err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [handleError, supabase])
+
+  useEffect(() => {
+    loadBots()
+  }, [loadBots])
 
   async function handleToggleBot(bot: Bot) {
     try {
@@ -58,10 +63,9 @@ export default function BotsPage() {
         .eq('id', bot.id)
 
       if (toggleError) throw toggleError
-      loadBots() // Reload the list
-    } catch (err: any) {
-      console.error('Error toggling bot:', err)
-      setError(err.message)
+      await loadBots() // Reload the list
+    } catch (err) {
+      handleError(err)
     }
   }
 
@@ -74,11 +78,10 @@ export default function BotsPage() {
         .eq('id', botId)
 
       if (deleteError) throw deleteError
-      loadBots() // Reload the list
+      await loadBots() // Reload the list
       setShowDeleteDialog(null) // Close dialog
-    } catch (err: any) {
-      console.error('Error deleting bot:', err)
-      setError(err.message)
+    } catch (err) {
+      handleError(err)
     }
   }
 

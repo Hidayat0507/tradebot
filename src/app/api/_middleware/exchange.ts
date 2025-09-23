@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { encrypt } from '@/utils/encryption'
 import type { SupportedExchange } from '@/lib/database/schema'
+import type { Database } from '@/lib/database/schema'
 import type { NextRequest } from 'next/server'
 import { getExchangePlugin } from '@/lib/exchanges/registry'
 import type { ResolvedExchangeCredentials } from '@/lib/exchanges/types'
@@ -55,7 +56,7 @@ export async function validateAndStoreCredentials(
   try {
     const plugin = getExchangePlugin(exchange)
 
-    const providedCreds: Record<string, string | undefined> = {
+    const providedCreds: Partial<Record<string, string | undefined>> = {
       apiKey,
       apiSecret,
       password,
@@ -94,13 +95,19 @@ export async function validateAndStoreCredentials(
     }
 
     const supabase = await createClient(request)
+    const updateFields: Database['public']['Tables']['bots']['Update'] = {
+      api_key: apiKey,
+      api_secret: encryptedSecret ?? '',
+      updated_at: new Date().toISOString(),
+    }
+
+    if (encryptedPassword) {
+      updateFields.password = encryptedPassword
+    }
+
     const { error } = await supabase
       .from('bots')
-      .update({
-        api_key: apiKey,
-        api_secret: encryptedSecret,
-        ...(encryptedPassword ? { password: encryptedPassword } : {}),
-      } as any)
+      .update(updateFields)
       .eq('id', botId)
 
     if (error) {

@@ -1,5 +1,4 @@
 import * as ccxt from 'ccxt'
-import type { Exchange } from 'ccxt'
 import { ApiError } from './api-handler'
 import { decrypt } from '@/utils/encryption'
 import { logger, normalizeError } from '@/lib/logging'
@@ -16,6 +15,7 @@ import type {
   StoredExchangeCredentials,
 } from '@/lib/exchanges/types'
 import type { SupportedExchange } from '@/lib/database/schema'
+import type { ExchangeClient, TickerResult, OrderBookResult, BalanceMap } from '@/types/exchange'
 
 export interface ExchangeCredentials extends StoredExchangeCredentials {
   apiKey: string
@@ -89,7 +89,7 @@ async function createClientInternal(
   plugin: ExchangePlugin,
   credentials?: ResolvedExchangeCredentials,
   context?: string
-): Promise<Exchange> {
+): Promise<ExchangeClient> {
   try {
     logger.info('Creating exchange client', {
       exchange,
@@ -101,7 +101,7 @@ async function createClientInternal(
 
     const client = await plugin.createClient(credentials, context)
     logger.info('Exchange client created successfully', { exchange, context })
-    return client
+    return client as unknown as ExchangeClient
   } catch (error) {
     const err = normalizeError(error)
     logger.error('Failed to create exchange client', err, {
@@ -130,7 +130,7 @@ export async function createExchangeClient(
   exchange: string,
   credentials?: ExchangeCredentials,
   context?: string
-): Promise<Exchange> {
+): Promise<ExchangeClient> {
   try {
     const plugin = getExchangePlugin(exchange)
     const resolvedCredentials = await resolveExchangeCredentials(exchange, credentials)
@@ -148,9 +148,13 @@ function getPluginForExchange(exchange: string | SupportedExchange): ExchangePlu
   }
 }
 
-function formatSymbol(plugin: ExchangePlugin, exchange: Exchange, symbol: string): string {
+function formatSymbol(plugin: ExchangePlugin, exchange: ExchangeClient, symbol: string): string {
   try {
-    return plugin.formatSymbol ? plugin.formatSymbol(exchange, symbol) : symbol
+    if (typeof plugin.formatSymbol === 'function') {
+      // Cast only for the plugin call site, ExchangeClient is our narrowed interface
+      return plugin.formatSymbol(exchange as unknown as ccxt.Exchange, symbol)
+    }
+    return symbol
   } catch (error) {
     logger.warn(
       'Error formatting symbol',
@@ -164,7 +168,7 @@ function formatSymbol(plugin: ExchangePlugin, exchange: Exchange, symbol: string
   }
 }
 
-export const fetchMarketData = async (exchange_client: Exchange, symbol: string) => {
+export const fetchMarketData = async (exchange_client: ExchangeClient, symbol: string) => {
   const plugin = getPluginForExchange(exchange_client.id as SupportedExchange)
 
   try {
@@ -175,7 +179,7 @@ export const fetchMarketData = async (exchange_client: Exchange, symbol: string)
       formatted_symbol: formattedSymbol,
     }
 
-    const cachedTicker = marketCache.get<ccxt.Ticker>(exchange_client.id, symbol, 'ticker')
+    const cachedTicker = marketCache.get<TickerResult>(exchange_client.id, symbol, 'ticker')
     if (cachedTicker) {
       logger.info('Using cached ticker data', {
         exchange: exchange_client.id,
@@ -204,7 +208,7 @@ export const fetchMarketData = async (exchange_client: Exchange, symbol: string)
       result.low_24h = ticker.low
     }
 
-    const cachedOrderBook = marketCache.get<ccxt.OrderBook>(exchange_client.id, symbol, 'orderBook')
+    const cachedOrderBook = marketCache.get<OrderBookResult>(exchange_client.id, symbol, 'orderBook')
     if (cachedOrderBook) {
       logger.info('Using cached order book data', {
         exchange: exchange_client.id,
@@ -286,7 +290,7 @@ export const fetchMarketData = async (exchange_client: Exchange, symbol: string)
   }
 }
 
-export async function validateMarket(exchange: Exchange, symbol: string): Promise<boolean> {
+export async function validateMarket(exchange: ExchangeClient, symbol: string): Promise<boolean> {
   try {
     const cachedMarkets = marketCache.get<ccxt.Market[]>(exchange.id, 'all', 'markets')
     if (cachedMarkets) {
@@ -315,7 +319,7 @@ export async function validateMarket(exchange: Exchange, symbol: string): Promis
 }
 
 export async function fetchBalance(
-  exchange: Exchange,
+  exchange: ExchangeClient,
   exchangeId: string,
   credentials: ResolvedExchangeCredentials
 ) {
@@ -330,7 +334,7 @@ export async function fetchBalance(
     })
 
     const params = plugin.getBalanceParams?.(credentials)
-    const balance = await exchange.fetchBalance(params)
+    const balance = await exchange.fetchBalance(params) as BalanceMap
 
     logger.info('Balance fetched successfully', {
       exchange: exchange.id,

@@ -5,6 +5,7 @@ import { ExchangeError } from './exchange';
 import type { Database, SupportedExchange } from '@/lib/database/schema';
 import { getExchangePlugin } from '@/lib/exchanges/registry';
 import type { ResolvedExchangeCredentials } from '@/lib/exchanges/types';
+import type { ExchangeClient } from '@/types/exchange';
 
 interface BotWithCredentials {
   exchange: SupportedExchange;
@@ -75,7 +76,7 @@ export async function getBotWithCredentials(
 /**
  * Create exchange client with proper configuration
  */
-export async function createExchangeClientFromBot(bot: BotWithCredentials) {
+export async function createExchangeClientFromBot(bot: BotWithCredentials): Promise<ExchangeClient> {
   const plugin = getExchangePlugin(bot.exchange)
   const credentials: ResolvedExchangeCredentials = {
     apiKey: bot.api_key,
@@ -89,7 +90,7 @@ export async function createExchangeClientFromBot(bot: BotWithCredentials) {
     credentials.password = await decrypt(bot.password)
   }
 
-  return plugin.createClient(credentials)
+  return (await plugin.createClient(credentials)) as unknown as ExchangeClient
 }
 
 /**

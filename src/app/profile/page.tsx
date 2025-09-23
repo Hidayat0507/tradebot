@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -19,8 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckCircle2, AlertCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const profileFormSchema = z.object({
@@ -42,7 +39,7 @@ type PasswordFormValues = z.infer<typeof passwordFormSchema>
 
 export default function ProfilePage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [initialValues, setInitialValues] = useState<ProfileFormValues>({
     username: '',
@@ -64,9 +61,11 @@ export default function ProfilePage() {
   })
 
   useEffect(() => {
-    async function loadUserData() {
+    let isMounted = true
+
+    const loadUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
+      if (user && isMounted) {
         const values = {
           username: user.user_metadata?.username || '',
           email: user.email || '',
@@ -75,8 +74,13 @@ export default function ProfilePage() {
         profileForm.reset(values)
       }
     }
+
     loadUserData()
-  }, [])
+
+    return () => {
+      isMounted = false
+    }
+  }, [profileForm, supabase])
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
     try {
@@ -89,8 +93,9 @@ export default function ProfilePage() {
 
       setMessage({ type: 'success', text: 'Profile updated successfully' })
       router.refresh()
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update profile'
+      setMessage({ type: 'error', text: message })
     }
   }
 
@@ -116,8 +121,9 @@ export default function ProfilePage() {
 
       setMessage({ type: 'success', text: 'Password updated successfully' })
       passwordForm.reset()
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update password'
+      setMessage({ type: 'error', text: message })
     }
   }
 

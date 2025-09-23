@@ -11,7 +11,6 @@ import {
 } from "react-hook-form"
 
 import { cn } from "@/lib/utils"
-import { Label } from "@/components/ui/label"
 
 const Form = FormProvider
 
@@ -92,6 +91,7 @@ const FormLabel = React.forwardRef<
 
   return (
     <LabelPrimitive.Root
+      ref={ref}
       className={cn(error && "text-red-500 dark:text-red-400", className)}
       htmlFor={formItemId}
       {...props}

@@ -10,10 +10,10 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
     throw new ApiError('Alert must be an object', 400);
   }
 
-  const alert = data as any;
+  const alert = { ...(data as Record<string, unknown>) };
 
   // Convert action to lowercase if it exists
-  if (alert.action) {
+  if (typeof alert.action === 'string') {
     alert.action = alert.action.toLowerCase();
   }
 
@@ -50,26 +50,35 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
   );
 
   // Remove secret before returning
-  delete alert.secret;
-  const alertWithoutSecret = alert;
+  delete (alert as Record<string, unknown>).secret;
+  const alertWithoutSecret = alert as Record<string, unknown>;
   
-  // Convert string values to numbers
-  const result = { ...alertWithoutSecret } as TradingViewSignal;
+  // Build strongly typed result
+  const result: TradingViewSignal = {
+    bot_id: String(alertWithoutSecret.bot_id),
+    symbol: String(alertWithoutSecret.symbol),
+    action: String(alertWithoutSecret.action) as TradingViewSignal['action'],
+    price: alertWithoutSecret.price as number | undefined,
+    strategy: alertWithoutSecret.strategy as string | undefined,
+    stoplossPercent: alertWithoutSecret.stoplossPercent as number | undefined,
+    amount: alertWithoutSecret.amount as number | undefined,
+    order_size: alertWithoutSecret.order_size as number | undefined,
+  };
   
-  if (typeof result.price === 'string') {
-    result.price = parseFloat(result.price);
+  if (typeof (result.price as unknown) === 'string') {
+    result.price = parseFloat(result.price as unknown as string);
   }
   
-  if (typeof result.stoplossPercent === 'string') {
-    result.stoplossPercent = parseFloat(result.stoplossPercent);
+  if (typeof (result.stoplossPercent as unknown) === 'string') {
+    result.stoplossPercent = parseFloat(result.stoplossPercent as unknown as string);
   }
   
-  if (typeof result.amount === 'string') {
-    result.amount = parseFloat(result.amount);
+  if (typeof (result.amount as unknown) === 'string') {
+    result.amount = parseFloat(result.amount as unknown as string);
   }
   
-  if (typeof result.order_size === 'string') {
-    result.order_size = parseFloat(result.order_size);
+  if (typeof (result.order_size as unknown) === 'string') {
+    result.order_size = parseFloat(result.order_size as unknown as string);
   }
 
   logger.info('Webhook alert validated', {

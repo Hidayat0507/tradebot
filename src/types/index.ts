@@ -1,4 +1,4 @@
-import type { Database } from '@/lib/database/schema'
+import type { Database, TradeSide } from '@/lib/database/schema'
 
 // Re-export common types
 export type { Database, SupportedExchange, TradeSide, TradeStatus } from '@/lib/database/schema'

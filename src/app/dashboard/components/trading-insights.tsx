@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { 
   Card, 
   CardContent, 
@@ -11,9 +11,9 @@ import {
 import { Badge } from '@/components/ui/badge'
 
 const TradingInsights: React.FC = () => {
-  const [totalProfit, setTotalProfit] = useState(0)
-  const [winRate, setWinRate] = useState(0)
-  const [totalTrades, setTotalTrades] = useState(0)
+  const totalProfit = 0
+  const winRate = 0
+  const totalTrades = 0
 
   return (
     <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out">

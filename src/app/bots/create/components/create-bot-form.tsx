@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { generateBotId } from '@/lib/crypto'
-import type { Database } from '@/lib/database/schema'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -80,8 +79,6 @@ export function CreateBotForm() {
     },
   })
 
-  const values = form.watch()
-
   async function onSubmit(values: CreateBotFormValues) {
     try {
       setIsSubmitting(true)
@@ -113,7 +110,7 @@ export function CreateBotForm() {
       const webhookSecret = randomBytes(32).toString('hex')
 
       // Step 1: Create the bot first with placeholder values
-      const { data: botData, error: botError } = await supabase
+      const { error: botError } = await supabase
         .from('bots')
         .insert({
           id: botId,

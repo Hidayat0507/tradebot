@@ -9,7 +9,7 @@ import {
   createExchangeClient,
   ExchangeCredentials
 } from '@/app/api/_middleware/exchange-middleware';
-import type { Exchange } from 'ccxt';
+// We use a narrowed ExchangeClient interface elsewhere; for optional features, guard at runtime
 
 interface Position {
   botId: string;
@@ -67,8 +67,10 @@ export async function GET(request: NextRequest) {
         // Await the exchange client creation
         const exchange = await createExchangeClient(bot.exchange, credentials);
 
-        // Fetch positions
-        const positions = await (exchange as Exchange).fetchPositions();
+        // Fetch positions if supported by the client
+        const positions = typeof (exchange as any).fetchPositions === 'function'
+          ? await (exchange as any).fetchPositions()
+          : [];
         dashboardData.positions.push(...positions.map((pos: any) => ({
           ...pos,
           botId: bot.id,
@@ -78,8 +80,10 @@ export async function GET(request: NextRequest) {
 
         // Bitget: Add custom PnL logic here if needed
 
-        // Fetch trades
-        const trades = await (exchange as Exchange).fetchMyTrades(undefined, undefined, 10);
+        // Fetch trades if supported by the client
+        const trades = typeof (exchange as any).fetchMyTrades === 'function'
+          ? await (exchange as any).fetchMyTrades(undefined, undefined, 10)
+          : [];
         dashboardData.recentTrades.push(...trades.map((trade: any) => ({
           ...trade,
           botId: bot.id,

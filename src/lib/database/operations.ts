@@ -11,7 +11,6 @@ export class DatabaseError extends Error {
 }
 
 type TradeInsert = Database['public']['Tables']['trades']['Insert'];
-type BotInsert = Database['public']['Tables']['bots']['Insert'];
 
 export async function getTrades(userId: string): Promise<Trade[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {

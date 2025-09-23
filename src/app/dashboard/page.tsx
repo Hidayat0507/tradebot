@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from "next/link"
 import { createClient } from '@/utils/supabase/client'
 import { StatsCard } from "@/components/dashboard/stats-card"
@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [isLoadingTrades, setIsLoadingTrades] = useState(true)
   const supabase = createClient()
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setIsLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -64,15 +64,16 @@ export default function DashboardPage() {
         message: log.message,
         details: log.details
       })))
-    } catch (error: any) {
-      console.error('Error fetching logs:', error.message || error)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch logs'
+      console.error('Error fetching logs:', message)
       setLogs([])
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [supabase])
 
-  const fetchTrades = async () => {
+  const fetchTrades = useCallback(async () => {
     setIsLoadingTrades(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -164,18 +165,19 @@ export default function DashboardPage() {
 
       // Combine both types of trades
       setTrades([...formattedDbTrades, ...simTrades])
-    } catch (error: any) {
-      console.error('Error fetching trades:', error.message || error)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch trades'
+      console.error('Error fetching trades:', message)
       setTrades([])
     } finally {
       setIsLoadingTrades(false)
     }
-  }
+  }, [supabase])
 
   useEffect(() => {
     fetchLogs()
     fetchTrades()
-  }, [])
+  }, [fetchLogs, fetchTrades])
 
   // Calculate stats
   const activeTrades = trades.filter(t => t.status === 'open' || t.status === 'pending').length

@@ -1,21 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import LogsTable, { type LogEntry } from '@/components/logs-table'
 
 type DbLogType = 'info' | 'warning' | 'error' | 'success'
 
-type LogResponse = {
+type RawLogResponse = {
   id: string
   bot_id: string
-  bots: {
-    name: string
-  } | null
+  bots?: Array<{ name?: string | null }> | null
   timestamp: string
   type: DbLogType
   message: string
-  details: Record<string, any> | null
+  details?: Record<string, unknown> | null
 }
 
 export default function LogsPage() {
@@ -23,7 +21,7 @@ export default function LogsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setIsLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -48,12 +46,12 @@ export default function LogsPage() {
 
       if (error) throw error
 
-      const typedData = data as unknown as LogResponse[]
-      
+      const typedData = (data ?? []) as RawLogResponse[]
+
       setLogs(typedData.map(log => ({
         id: log.id,
         botId: log.bot_id,
-        botName: log.bots?.name || 'Unknown Bot',
+        botName: log.bots && Array.isArray(log.bots) && log.bots.length > 0 ? log.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot',
         timestamp: log.timestamp,
         type: log.type,
         message: log.message,
@@ -64,11 +62,11 @@ export default function LogsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [supabase])
 
   useEffect(() => {
     fetchLogs()
-  }, [])
+  }, [fetchLogs])
 
   return (
     <div className="container py-8">

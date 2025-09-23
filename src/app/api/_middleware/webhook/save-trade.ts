@@ -1,15 +1,18 @@
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { logger, normalizeError } from '@/lib/logging';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { OrderResult } from '@/types/exchange';
+import type { Database } from '@/lib/database/schema';
 
 /**
  * Save trade to database
  */
 export async function saveTrade(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   userId: string,
   botId: string,
-  order: any,
+  order: OrderResult,
   alert: TradingViewSignal,
   price: number,
   calculatedAmount?: number  // Add calculated amount as backup
@@ -31,7 +34,7 @@ export async function saveTrade(
       // Calculate PnL: (Sell Price - Buy Price) * Sell Size
       const sellPrice = order.price || order.average || price;
       const buyPrice = lastBuyTrade.price;
-      const sellSize = order.amount || calculatedAmount;
+      const sellSize = order.amount ?? calculatedAmount ?? 0;
       pnl = (sellPrice - buyPrice) * sellSize;
     }
   }
@@ -43,7 +46,7 @@ export async function saveTrade(
     symbol: alert.symbol,
     side: alert.action.toLowerCase(),
     status: 'filled',
-    size: order.amount || calculatedAmount,  // Use calculated amount as fallback
+    size: order.amount ?? calculatedAmount ?? 0,  // Use calculated amount as fallback
     price: order.price || order.average || price,
     pnl: pnl
   };
@@ -74,7 +77,6 @@ export async function saveTrade(
         new Error('Row-level security violation'),
         {
           userId,
-          supabaseAuthUserId: supabase.auth?.user?.()?.id,
           tradeUserId: trade.user_id,
         }
       );

@@ -1,6 +1,7 @@
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { logger, normalizeError } from '@/lib/logging';
+import type { ExchangeClient, BalanceMap, CurrencyBalance, OrderResult } from '@/types/exchange';
 
 export interface BotData {
   id: string;
@@ -18,11 +19,11 @@ export interface BotData {
  * Execute direct amount trade
  */
 async function executeDirectAmountTrade(
-  exchange: any,
+  exchange: ExchangeClient,
   alert: TradingViewSignal,
   price: number,
   isHyperliquid: boolean
-) {
+): Promise<OrderResult> {
   // Order type is limit only if price is provided in the alert
   const orderType = alert.price ? 'limit' : 'market';
   
@@ -54,7 +55,7 @@ async function executeDirectAmountTrade(
     alert.symbol,
     orderType,
     alert.action.toLowerCase(),
-    alert.amount,
+    alert.amount ?? 0,
     orderPrice,
     orderOptions
   );
@@ -64,7 +65,7 @@ async function executeDirectAmountTrade(
  * Calculate trade amount based on available balance and percentage
  */
 async function calculateTradeAmount(
-  exchange: any,
+  exchange: ExchangeClient,
   alert: TradingViewSignal,
   price: number,
   bot: BotData
@@ -106,7 +107,7 @@ async function calculateTradeAmount(
   });
   
   // Try to get balance following the same pattern as in bot-balance.tsx
-  let balance;
+  let balance: BalanceMap;
   try {
     if (isHyperliquid) {
       // For Hyperliquid, use correct market type and user parameters
@@ -138,7 +139,7 @@ async function calculateTradeAmount(
     if (!balance[currency] || balance[currency]?.free === undefined) {
       throw new Error(`Currency ${currency} not found in ${marketType} balance`);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     const normalizedError = normalizeError(err)
     logger.error('Failed to fetch balance', normalizedError, {
       currency,
@@ -149,7 +150,8 @@ async function calculateTradeAmount(
   }
   
   // Get available balance
-  const available = balance[currency].free;
+  const currencyBalance = (balance[currency] as CurrencyBalance) ?? {}
+  const available = currencyBalance.free ?? 0;
   
   // Calculate order size percentage
   const percentage = bot.order_size || 100; // Default to 100% if not specified
@@ -161,11 +163,13 @@ async function calculateTradeAmount(
     price,
     action: alert.action,
     isHyperliquid,
-    balanceInfo: balance[currency],
-    allBalances: Object.keys(balance).map(key => ({
-      currency: key,
-      balance: balance[key]?.free
-    }))
+    balanceInfo: currencyBalance,
+    allBalances: Object.entries(balance)
+      .filter(([key]) => !['info', 'total', 'free', 'used'].includes(key))
+      .map(([key, entry]) => ({
+        currency: key,
+        balance: (entry as CurrencyBalance | undefined)?.free
+      }))
   });
   
   // Calculate position size
@@ -241,12 +245,12 @@ async function calculateTradeAmount(
  * Execute real order
  */
 async function executeRealOrder(
-  exchange: any,
+  exchange: ExchangeClient,
   alert: TradingViewSignal,
   amount: number,
   price: number,
   isHyperliquid: boolean
-) {
+): Promise<OrderResult> {
   // Define the order type based on whether price is provided in the alert
   const orderType = alert.price ? 'limit' : 'market';
   
@@ -343,29 +347,30 @@ async function executeRealOrder(
  * Execute trade based on webhook alert
  */
 export async function executeTrade(
-  exchange: any,
+  exchange: ExchangeClient,
   alert: TradingViewSignal,
-  market: any,
   price: number,
   bot: BotData
-) {
+): Promise<{ order: OrderResult; calculatedAmount: number }> {
   try {
     const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
 
     // For Hyperliquid, we need to set credentials correctly
     if (isHyperliquid) {
       // Set credentials in CCXT format
+      const existingOptions = (exchange.options ?? {}) as Record<string, unknown>
       exchange.options = {
-        ...exchange.options,
+        ...existingOptions,
         apiKey: bot.api_key,         // Wallet address
         secret: bot.api_secret,      // Private key
         privateKey: bot.api_secret,  // Private key for signing
         walletAddress: bot.api_key   // Required for order signing
-      };
-      
+      }
+
+      const optionsRecord = exchange.options as Record<string, unknown>
       logger.info('Set Hyperliquid credentials', {
         walletAddress: bot.api_key,
-        hasPrivateKey: !!exchange.options.privateKey
+        hasPrivateKey: Boolean(optionsRecord.privateKey)
       });
     }
 
