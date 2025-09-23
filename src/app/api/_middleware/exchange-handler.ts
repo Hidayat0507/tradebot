@@ -57,7 +57,7 @@ export async function getBotWithCredentials(
 
   try {
     getExchangePlugin(data.exchange as SupportedExchange);
-  } catch (pluginError) {
+  } catch (_pluginError) {
     throw new ExchangeError(`Invalid exchange type: ${data.exchange}`, 400);
   }
 
@@ -95,11 +95,11 @@ export async function createExchangeClientFromBot(bot: BotWithCredentials) {
 /**
  * Standard error response handler
  */
-export function handleExchangeError(error: any) {
+export function handleExchangeError(error: unknown) {
   console.error('Exchange operation error:', error);
   
   const status = error instanceof ExchangeError ? error.statusCode : 500;
-  const message = error.message || 'An unexpected error occurred';
+  const message = error instanceof Error ? error.message : 'An unexpected error occurred';
   
   return NextResponse.json({ error: message }, { status });
 } 

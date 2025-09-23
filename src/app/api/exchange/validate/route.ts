@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
 import { validateAndStoreCredentials, ExchangeError } from '@/app/api/_middleware/exchange';
 import type { SupportedExchange } from '@/lib/database/schema';
 
@@ -39,10 +38,10 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Use statusCode from ExchangeError if available
     const status = error instanceof ExchangeError ? error.statusCode : 500;
-    const message = error.message || 'Failed to validate exchange credentials';
+    const message = error instanceof Error ? error.message : 'Failed to validate exchange credentials';
     
     return NextResponse.json({ error: message }, { status });
   }

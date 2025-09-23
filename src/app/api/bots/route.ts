@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { supabase } from '@/lib/database/client'
+// note: using request-scoped Supabase from getAuthenticatedUser
 import { encrypt } from '@/utils/encryption';
 import { randomBytes } from 'crypto';
 import type { Database } from '@/lib/database/schema'
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Add password property using type assertion to bypass linter
-    const botDataWithPassword = { ...botData, password } as any;
+    const botDataWithPassword: BotInsert & { password?: string } = { ...botData, ...(password ? { password } : {}) };
 
     const { data: bot, error } = await supabase
       .from('bots')
