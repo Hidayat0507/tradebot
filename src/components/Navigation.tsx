@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from "@/components/ui/button"
 import { createClient } from '@/utils/supabase/client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
 import ProfileMenu from './profile-menu'
 
@@ -33,17 +33,16 @@ const NavLink = ({ href, children }: { href: string; children: React.ReactNode }
 }
 
 export default function Navigation() {
-  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    // Get initial user state
+    const supabase = createClient()
+
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user)
     })
 
-    // Set up auth state listener
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -56,7 +55,7 @@ export default function Navigation() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [router, supabase])
+  }, [router])
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">

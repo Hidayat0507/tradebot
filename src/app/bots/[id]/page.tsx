@@ -164,27 +164,23 @@ export default function BotDetailsPage() {
                 </div>
 
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                  <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">TradingView Alert Message Example:</h3>
+                  <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">TradingView Alert Message Example</h3>
                   <div className="space-y-4">
                     <pre className="text-xs bg-white dark:bg-gray-900 p-3 rounded-md overflow-x-auto text-gray-900 dark:text-gray-100">
 {`{
-  // Required fields
   "bot_id": "${bot.id}",
   "symbol": "${bot.pair}",
-  "action": "buy",  // or "sell"
-
-  // Optional fields
-  "price": {{close}},        // Default: market price
-  "strategy": "MA Cross",    // Default: ""
-  "stoplossPercent": 2.5    // Default: none
+  "action": "{{strategy.order.action}}",
+  "order_size": 50,
+  "secret": "${(bot as any).webhook_secret || 'YOUR_WEBHOOK_SECRET'}"
 }`}
                     </pre>
                     <div className="text-xs text-gray-600 dark:text-gray-400">
-                      <p className="font-medium mb-1">Required Fields:</p>
+                      <p className="font-medium mb-1">Notes:</p>
                       <ul className="list-disc list-inside space-y-1 ml-2">
-                        <li><code className="text-gray-900 dark:text-gray-200">bot_id</code>: Your bot's unique identifier</li>
-                        <li><code className="text-gray-900 dark:text-gray-200">symbol</code>: Trading pair (e.g., BTC/USDT)</li>
-                        <li><code className="text-gray-900 dark:text-gray-200">action</code>: Must be either "buy" or "sell" (case-insensitive)</li>
+                        <li>Use <code className="text-gray-900 dark:text-gray-200">order_size</code> as percent of balance (e.g., 25, 50, 100).</li>
+                        <li><code className="text-gray-900 dark:text-gray-200">symbol</code> must match the exchange format (e.g., Bitget spot: BTC/USDT; Hyperliquid perps: BTC/USDC:USDC).</li>
+                        <li>Optional: add <code className="text-gray-900 dark:text-gray-200">price</code> for limit orders, <code className="text-gray-900 dark:text-gray-200">strategy</code>, and <code className="text-gray-900 dark:text-gray-200">stoplossPercent</code>.</li>
                       </ul>
                     </div>
                   </div>

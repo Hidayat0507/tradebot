@@ -123,18 +123,7 @@ export function WebhookSecretSection({ bot, onSecretRegenerated }: WebhookSecret
           {isRegenerating ? 'Regenerating...' : 'Regenerate Secret'}
         </Button>
         
-        <div className="text-sm text-muted-foreground">
-          <p>Example TradingView Alert Message:</p>
-          <pre className="mt-2 p-2 bg-muted rounded-md overflow-x-auto">
-{`{
-  "bot_id": "${bot.id}",
-  "symbol": "{{ticker}}",
-  "side": "{{strategy.order.action}}",
-  "price": {{close}},
-  "secret": "${bot.webhook_secret || 'YOUR_WEBHOOK_SECRET'}"
-}`}
-          </pre>
-        </div>
+        {/* Example removed here to avoid duplication. See the Webhook Configuration card above for the single TradingView example. */}
       </CardContent>
     </Card>
   );
