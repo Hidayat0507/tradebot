@@ -2,14 +2,20 @@
 
 import { Card } from "@/components/ui/card"
 import { CopyButton } from "@/components/ui/copy-button"
+import { useEffect, useState } from 'react';
 
 export default function ApiDocumentation({ botId }: { botId?: string }) {
+  const [now, setNow] = useState<string | null>(null);
+  useEffect(() => {
+    setNow(new Date().toISOString());
+  }, []);
+
   const buyJson = {
     symbol: "BTCUSDT",
     action: "BUY",
     order_size: "100%",
     position_size: "1",
-    timestamp: new Date().toISOString()
+    timestamp: now || ''
   }
 
   const sellJson = {
@@ -17,7 +23,7 @@ export default function ApiDocumentation({ botId }: { botId?: string }) {
     action: "SELL",
     order_size: "100%",
     position_size: "0",
-    timestamp: new Date().toISOString()
+    timestamp: now || ''
   }
 
   const webhookUrl = botId 
@@ -69,7 +75,7 @@ export default function ApiDocumentation({ botId }: { botId?: string }) {
               <CopyButton value={JSON.stringify(buyJson, null, 2)} />
             </div>
             <pre className="relative bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-lg overflow-auto text-sm text-gray-800 dark:text-gray-200">
-              {JSON.stringify(buyJson, null, 2)}
+              {now ? JSON.stringify(buyJson, null, 2) : 'Loading...'}
             </pre>
           </div>
           <div>
@@ -78,7 +84,7 @@ export default function ApiDocumentation({ botId }: { botId?: string }) {
               <CopyButton value={JSON.stringify(sellJson, null, 2)} />
             </div>
             <pre className="relative bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-lg overflow-auto text-sm text-gray-800 dark:text-gray-200">
-              {JSON.stringify(sellJson, null, 2)}
+              {now ? JSON.stringify(sellJson, null, 2) : 'Loading...'}
             </pre>
           </div>
         </div>

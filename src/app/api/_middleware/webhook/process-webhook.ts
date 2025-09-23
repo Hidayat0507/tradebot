@@ -1,7 +1,7 @@
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { createExchangeClient, validateMarket } from '../exchange-middleware';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 import { marketCache } from '@/lib/market-cache';
 import * as ccxt from 'ccxt';
 import { BotData } from './execute-trade';
@@ -20,7 +20,8 @@ export async function processWebhookAlert(
     // Create exchange client with proper credentials
     const exchange_client = await createExchangeClient(bot.exchange, {
       apiKey: bot.api_key,
-      apiSecret: bot.api_secret
+      apiSecret: bot.api_secret,
+      password: bot.password
     });
 
     // Validate market and get current price
@@ -79,7 +80,7 @@ export async function processWebhookAlert(
 
     return trade;
   } catch (error) {
-    logger.error('Failed to process webhook alert', { error, alert });
+    logger.error('Failed to process webhook alert', normalizeError(error), { alert });
     throw error;
   }
-} 
+}

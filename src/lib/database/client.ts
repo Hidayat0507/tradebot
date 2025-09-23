@@ -1,4 +1,4 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './schema'
 
 export class ConfigError extends Error {
@@ -30,7 +30,7 @@ if (typeof window === 'undefined') {
   validateEnvironment()
 }
 
-export function createClient() {
+export function createClient(): SupabaseClient<Database> {
   return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -38,4 +38,4 @@ export function createClient() {
 }
 
 // Export a singleton instance for use in operations
-export const supabase = createClient()
+export const supabase: SupabaseClient<Database> = createClient()

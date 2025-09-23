@@ -7,7 +7,7 @@ import type { SupportedExchange } from '@/lib/database/schema';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { apiKey, apiSecret, exchange, botId } = body;
+    const { apiKey, apiSecret, exchange, botId, password } = body;
 
     // Validate required fields
     if (!exchange) {
@@ -28,13 +28,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate and store credentials
+    // Validate and store credentials (Bitget requires passphrase)
     const result = await validateAndStoreCredentials(
       request,
       botId,
       apiKey,
       apiSecret || '', // Use empty string for Hyperliquid
-      exchange as SupportedExchange
+      exchange as SupportedExchange,
+      password // Bitget passphrase (optional for other exchanges)
     );
 
     return NextResponse.json(result);

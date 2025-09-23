@@ -3,7 +3,7 @@
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { User } from '@supabase/supabase-js'
+import type { User } from '@supabase/supabase-js'
 
 export default function SessionProvider({
   children,
@@ -11,13 +11,12 @@ export default function SessionProvider({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const [_, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   
   useEffect(() => {
     const supabase = createClient()
 
-    // Get initial user state
     const initializeAuth = async () => {
       try {
         const { data: { user: currentUser }, error } = await supabase.auth.getUser()
@@ -32,13 +31,11 @@ export default function SessionProvider({
 
     initializeAuth()
 
-    // Set up auth state listener
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
 
-      // Force router refresh to update all components
       if (event === 'SIGNED_IN') {
         router.push('/dashboard')
         router.refresh()
@@ -54,7 +51,7 @@ export default function SessionProvider({
   }, [router])
 
   if (isLoading) {
-    return null // or a loading spinner
+    return null
   }
 
   return <>{children}</>

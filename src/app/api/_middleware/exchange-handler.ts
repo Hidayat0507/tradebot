@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as ccxt from 'ccxt';
 import { createClient } from '@/utils/supabase/server';
 import { decrypt } from '@/utils/encryption';
 import { ExchangeError } from './exchange';
 import type { Database, SupportedExchange } from '@/lib/database/schema';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { getExchangePlugin } from '@/lib/exchanges/registry';
+import type { ResolvedExchangeCredentials } from '@/lib/exchanges/types';
 
 interface BotWithCredentials {
   exchange: SupportedExchange;
   api_key: string;
   api_secret?: string;
+  password?: string;
 }
 
-type BotCredentialsRow = Pick<Database['public']['Tables']['bots']['Row'], 'exchange' | 'api_key' | 'api_secret'>;
+type BotCredentialsRow = Pick<Database['public']['Tables']['bots']['Row'], 'exchange' | 'api_key' | 'api_secret' | 'password'>;
 
 /**
  * Get authenticated user from request
@@ -34,7 +35,7 @@ export async function getAuthenticatedUser(request: NextRequest) {
 export async function getBotWithCredentials(
   request: NextRequest,
   botId: string,
-  fields: string[] = ['exchange', 'api_key', 'api_secret']
+  fields: string[] = ['exchange', 'api_key', 'api_secret', 'password']
 ): Promise<BotWithCredentials> {
   const { user, supabase } = await getAuthenticatedUser(request);
   
@@ -54,8 +55,9 @@ export async function getBotWithCredentials(
     throw new ExchangeError('Bot is missing required credentials', 400);
   }
 
-  // Validate exchange type
-  if (!['binance', 'hyperliquid', 'bitget'].includes(data.exchange)) {
+  try {
+    getExchangePlugin(data.exchange as SupportedExchange);
+  } catch (pluginError) {
     throw new ExchangeError(`Invalid exchange type: ${data.exchange}`, 400);
   }
 
@@ -63,7 +65,8 @@ export async function getBotWithCredentials(
   const botWithCreds: BotWithCredentials = {
     exchange: data.exchange as SupportedExchange, // Safe cast since we validated the value
     api_key: data.api_key,
-    api_secret: data.api_secret
+    api_secret: data.api_secret,
+    password: data.password
   };
   
   return botWithCreds;
@@ -73,28 +76,20 @@ export async function getBotWithCredentials(
  * Create exchange client with proper configuration
  */
 export async function createExchangeClientFromBot(bot: BotWithCredentials) {
-  if (!['binance', 'hyperliquid', 'bitget'].includes(bot.exchange)) {
-    throw new ExchangeError(`Unsupported exchange: ${bot.exchange}`, 400);
-  }
-
-  let exchangeClass;
-  if (bot.exchange === 'binance') {
-    exchangeClass = ccxt.binance;
-  } else if (bot.exchange === 'hyperliquid') {
-    exchangeClass = ccxt.hyperliquid;
-  } else if (bot.exchange === 'bitget') {
-    exchangeClass = ccxt.bitget;
-  }
-  if (!exchangeClass) {
-    throw new ExchangeError(`Unsupported exchange: ${bot.exchange}`, 400);
-  }
-  const exchange = new exchangeClass({
+  const plugin = getExchangePlugin(bot.exchange)
+  const credentials: ResolvedExchangeCredentials = {
     apiKey: bot.api_key,
-    secret: bot.api_secret ? decrypt(bot.api_secret) : '',
-    enableRateLimit: true
-  });
+  }
 
-  return exchange;
+  if (bot.api_secret) {
+    credentials.apiSecret = await decrypt(bot.api_secret)
+  }
+
+  if ((bot as any).password) {
+    credentials.password = await decrypt((bot as any).password)
+  }
+
+  return plugin.createClient(credentials)
 }
 
 /**

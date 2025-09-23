@@ -12,14 +12,13 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
 
 const SUPPORTED_EXCHANGES = [
-  { id: 'binance', name: 'Binance' },
-  { id: 'hyperliquid', name: 'Hyperliquid' },
   { id: 'bitget', name: 'Bitget' },
+  { id: 'hyperliquid', name: 'Hyperliquid' },
 ] as const
 
 const TRADING_PAIRS = [
@@ -42,7 +41,7 @@ const TRADING_PAIRS = [
 
 const createBotFormSchema = z.object({
   name: z.string().min(3, 'Bot name must be at least 3 characters'),
-  exchange: z.enum(['binance', 'hyperliquid', 'bitget'] as const),
+  exchange: z.enum(['hyperliquid', 'bitget'] as const),
   pair: z.string().min(1, 'Trading pair is required'),
   max_position_size: z.number()
     .min(0.0001, 'Position size must be at least 0.0001')
@@ -53,6 +52,7 @@ const createBotFormSchema = z.object({
     .optional(),
   api_key: z.string().min(1, 'API Key is required'),
   api_secret: z.string().optional(),
+  password: z.string().optional(),
 })
 
 type CreateBotFormValues = z.infer<typeof createBotFormSchema>
@@ -64,6 +64,8 @@ export function CreateBotForm() {
   const [success, setSuccess] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validationSuccess, setValidationSuccess] = useState<string | null>(null)
+  const [showApiSecret, setShowApiSecret] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const supabase = createClient()
   const form = useForm<CreateBotFormValues>({
     resolver: zodResolver(createBotFormSchema),
@@ -71,9 +73,10 @@ export function CreateBotForm() {
       name: '',
       pair: 'BTC/USDT',
       max_position_size: 0.01,
-      exchange: 'binance',
+      exchange: 'bitget',
       api_key: '',
       api_secret: '',
+      password: '',
     },
   })
 
@@ -117,7 +120,7 @@ export function CreateBotForm() {
           user_id: userId,
           name: values.name,
           exchange: values.exchange,
-          pair: values.pair.replace('/', ''),
+          pair: values.pair, // keep CCXT symbol format with slash
           max_position_size: values.max_position_size,
           stoploss_percentage: values.stoploss_percentage,
           enabled: false,
@@ -139,6 +142,7 @@ export function CreateBotForm() {
         exchange: values.exchange,
         apiKey: values.api_key,
         apiSecret: values.api_secret,
+        password: values.exchange === 'bitget' ? values.password : undefined,
       }
       console.log('Sending request to validate API:', requestBody)
 
@@ -379,18 +383,64 @@ export function CreateBotForm() {
                 <FormItem>
                   <FormLabel>API Secret</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="Your API Secret" 
-                      {...field} 
-                      value={field.value || ''} 
-                    />
+                    <div className="relative">
+                      <Input 
+                        type={showApiSecret ? "text" : "password"}
+                        placeholder="Your API Secret" 
+                        {...field} 
+                        value={field.value || ''} 
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                        tabIndex={-1}
+                        onClick={() => setShowApiSecret((v) => !v)}
+                        aria-label={showApiSecret ? 'Hide API Secret' : 'Show API Secret'}
+                      >
+                        {showApiSecret ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormDescription>Your exchange API secret.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {form.watch('exchange') === 'bitget' && (
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password (API Passphrase)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Your Bitget API Passphrase"
+                          {...field}
+                          value={field.value || ''}
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          tabIndex={-1}
+                          onClick={() => setShowPassword((v) => !v)}
+                          aria-label={showPassword ? 'Hide Password' : 'Show Password'}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                    </FormControl>
+                    <FormDescription>
+                      Your Bitget API passphrase (sometimes called password).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </div>
 
           <Button type="submit" disabled={isSubmitting}>

@@ -1,4 +1,4 @@
-type LogLevel = 'info' | 'warn' | 'error';
+type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 type LogContext = Record<string, unknown>;
 
 interface LogEntry {
@@ -14,8 +14,8 @@ class Logger {
     const formattedError = new Error(error.message);
     formattedError.name = error.name;
     formattedError.stack = error.stack;
-    if ((error as any).cause) {
-      (formattedError as any).cause = this.formatError((error as any).cause);
+    if ('cause' in error && error.cause instanceof Error) {
+      (formattedError as { cause?: Error }).cause = this.formatError(error.cause);
     }
     return formattedError;
   }
@@ -63,6 +63,10 @@ class Logger {
     this.log(this.createLogEntry('error', message, context, error));
   }
 
+  debug(message: string, context?: LogContext): void {
+    this.log(this.createLogEntry('debug', message, context));
+  }
+
   // Specific trading related logs
   tradingError(operation: string, error: Error, context?: LogContext): void {
     this.error(
@@ -97,3 +101,28 @@ class Logger {
 }
 
 export const logger = new Logger();
+
+export function normalizeError(value: unknown, fallbackMessage = 'Unknown error'): Error {
+  if (value instanceof Error) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return new Error(value);
+  }
+
+  if (value && typeof value === 'object') {
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) {
+      return new Error(message);
+    }
+  }
+
+  try {
+    return new Error(JSON.stringify(value));
+  } catch {
+    return new Error(fallbackMessage);
+  }
+}
+
+export type { LogContext };

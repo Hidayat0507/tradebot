@@ -6,7 +6,7 @@ import {
   successResponse,
   ApiError
 } from '@/app/api/_middleware/api-handler';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 
 export async function POST(
   request: NextRequest,
@@ -29,7 +29,7 @@ export async function POST(
       .eq('id', id);
 
     if (error) {
-      logger.error('Failed to update webhook secret', { error, botId: id, userId: user.id });
+      logger.error('Failed to update webhook secret', normalizeError(error), { botId: id, userId: user.id });
       throw new ApiError('Failed to update webhook secret', 500);
     }
 

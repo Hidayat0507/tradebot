@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BotBalance } from '@/app/bots/components/bot-balance';
 import { createClient } from '@/utils/supabase/client';
-import { Pie } from 'react-chartjs-2';
 import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
 import ExchangePieChart from './components/exchange-pie-chart';
 Chart.register(ArcElement, Tooltip, Legend);
@@ -40,13 +39,6 @@ export default function AssetsPage() {
     }
     fetchBots();
   }, [supabase]);
-
-  // Group bots by exchange
-  const exchangeGroups = bots.reduce((acc, bot) => {
-    if (!acc[bot.exchange]) acc[bot.exchange] = [];
-    acc[bot.exchange].push(bot);
-    return acc;
-  }, {} as Record<string, Bot[]>);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 md:p-8">

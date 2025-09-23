@@ -60,7 +60,8 @@ export async function GET(request: NextRequest) {
       try {
         const credentials: ExchangeCredentials = {
           apiKey: bot.api_key,
-          apiSecret: bot.api_secret
+          apiSecret: bot.api_secret,
+          password: (bot as any).password || undefined
         };
 
         // Await the exchange client creation
@@ -75,15 +76,6 @@ export async function GET(request: NextRequest) {
         })));
         dashboardData.totalPositions += positions.length;
 
-        // Fetch PnL (last 24h) - Exchange specific
-        if (bot.exchange === 'binance') {
-          const pnl = await (exchange as any).fapiPrivateGetIncome({
-            incomeType: 'REALIZED_PNL',
-            startTime: Date.now() - 24 * 60 * 60 * 1000 // 24h ago
-          });
-          dashboardData.totalPnL += pnl.reduce((total: number, income: any) => 
-            total + parseFloat(income.income), 0);
-        }
         // Bitget: Add custom PnL logic here if needed
 
         // Fetch trades

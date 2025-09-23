@@ -6,11 +6,11 @@ import {
   successResponse,
   validateFields
 } from '@/app/api/_middleware/api-handler'
-import {
+import { 
   createExchangeClient,
   fetchMarketData
 } from '@/app/api/_middleware/exchange-middleware'
-import { logger } from '@/lib/logging'
+import { logger, normalizeError } from '@/lib/logging'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
 
     if (error) {
-      logger.error('Failed to fetch bots', { error, userId: user.id })
+      const err = normalizeError(error)
+      logger.error('Failed to fetch bots', err, { userId: user.id })
       throw new ApiError('Failed to fetch bots', 500)
     }
 
@@ -31,9 +32,9 @@ export async function GET(request: NextRequest) {
       return successResponse([])
     }
 
-    // Fetch market data for each bot (only Binance and Bitget)
+    // Fetch market data for each bot (only Bitget; Hyperliquid public market data disabled here)
     const marketDataPromises = bots
-      .filter(bot => ['binance', 'bitget'].includes(bot.exchange.toLowerCase()))
+      .filter(bot => ['bitget'].includes(bot.exchange.toLowerCase()))
       .map(async (bot) => {
         try {
           const exchange_client = await createExchangeClient(bot.exchange, undefined, 'market_data')
@@ -44,11 +45,11 @@ export async function GET(request: NextRequest) {
             ...marketData
           }
         } catch (error) {
-          logger.error('Failed to fetch market data for bot', { 
-            error: error instanceof Error ? error.message : String(error),
-            botId: bot.id, 
-            exchange: bot.exchange, 
-            pair: bot.pair 
+          const err = normalizeError(error)
+          logger.error('Failed to fetch market data for bot', err, {
+            botId: bot.id,
+            exchange: bot.exchange,
+            pair: bot.pair,
           })
           
           // Return error info instead of failing the entire request
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
             exchange: bot.exchange,
             symbol: bot.pair,
             error: true,
-            message: error instanceof Error ? error.message : 'Unknown error'
+            message: err.message
           }
         }
       })
@@ -78,12 +79,12 @@ export async function POST(request: NextRequest) {
     
     const { exchange, symbol } = payload
     
-    // Only allow Binance and Bitget exchange
-    if (!['binance', 'bitget'].includes(exchange.toLowerCase())) {
-      logger.info('Rejecting non-Binance/Bitget market data request', { exchange, symbol })
+    // Only allow Bitget exchange for public market data
+    if (!['bitget'].includes(exchange.toLowerCase())) {
+      logger.info('Rejecting non-Bitget market data request', { exchange, symbol })
       return successResponse({
         error: true,
-        message: "Only Binance and Bitget exchanges are supported for market data requests.",
+        message: "Only Bitget exchange is supported for market data requests.",
         symbol,
         exchange
       })
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     logger.info('Market data request', { exchange, symbol })
     
     // Create exchange client for public data (no credentials needed)
-    const exchange_client = await createExchangeClient(exchange, undefined, 'market_data')
+    const exchange_client = await createExchangeClient('bitget', undefined, 'market_data')
     
     try {
       const marketData = await fetchMarketData(exchange_client, symbol)

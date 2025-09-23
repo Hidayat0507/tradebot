@@ -1,5 +1,5 @@
 // Base types that represent our database enums
-export type SupportedExchange = 'binance' | 'hyperliquid' | 'bitget'
+export type SupportedExchange = 'hyperliquid' | 'bitget'
 export type TradeSide = 'buy' | 'sell'
 export type TradeStatus = 'OPEN' | 'CLOSED' | 'CANCELLED'
 
@@ -26,6 +26,7 @@ export interface Database {
           enabled: boolean
           api_key: string
           api_secret: string
+           password?: string
           webhook_secret: string
           created_at: string
           updated_at: string
@@ -41,6 +42,7 @@ export interface Database {
           enabled: boolean
           api_key: string
           api_secret: string
+           password?: string
           webhook_secret: string
           created_at?: string
           updated_at?: string
@@ -56,6 +58,7 @@ export interface Database {
           enabled?: boolean
           api_key?: string
           api_secret?: string
+           password?: string
           webhook_secret?: string
           created_at?: string
           updated_at?: string

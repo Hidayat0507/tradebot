@@ -1,4 +1,4 @@
-import { logger } from './logging';
+import { logger, normalizeError } from './logging';
 
 interface NotificationOptions {
   title: string;
@@ -40,7 +40,9 @@ export class NotificationService {
         throw new Error(`Discord webhook failed: ${response.statusText}`);
       }
     } catch (error: any) {
-      logger.error('Failed to send notification', error);
+      logger.error('Failed to send notification', normalizeError(error), {
+        webhookUrl: this.discordWebhookUrl
+      });
     }
   }
 

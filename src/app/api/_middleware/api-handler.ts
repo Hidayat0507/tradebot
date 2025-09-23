@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import type { Database } from '@/lib/database/schema';
-import { logger } from '@/lib/logging';
+import type { SupportedExchange } from '@/lib/database/schema';
+export const runtime = 'nodejs';
+import { logger, normalizeError } from '@/lib/logging';
+import { listEnabledExchanges } from '@/lib/exchanges/registry';
 
 export class ApiError extends Error {
   constructor(
     message: string,
     public statusCode: number = 500,
-    public data?: any
+    public data?: unknown
   ) {
     super(message);
     this.name = 'ApiError';
@@ -17,10 +19,12 @@ export class ApiError extends Error {
 /**
  * Validate required fields and optional custom validations
  */
-export function validateFields(
-  data: any, 
+export function validateFields<
+  T extends Record<string, unknown> = Record<string, unknown>
+>(
+  data: T, 
   requiredFields: string[], 
-  customValidators?: Record<string, (value: any) => boolean | string>
+  customValidators?: Record<string, (value: unknown) => boolean | string>
 ) {
   // Check for required fields
   for (const field of requiredFields) {
@@ -108,14 +112,23 @@ export async function getBotWithOwnership(
 /**
  * Validate bot data
  */
-export function validateBotData(data: any) {
+const enabledExchangeSet = new Set<SupportedExchange>(
+  listEnabledExchanges().map((plugin) => plugin.id)
+);
+
+export function validateBotData(data: Record<string, unknown>) {
   validateFields(
     data,
     ['name', 'exchange', 'pair'],
     {
-      exchange: (value) => 
-        ['binance', 'hyperliquid', 'bitget'].includes(value) || 
-        'Invalid exchange. Must be binance, hyperliquid, or bitget'
+      exchange: (value) => {
+        if (typeof value !== 'string') return 'Invalid exchange selection'
+        const normalized = value.toLowerCase() as SupportedExchange
+        return (
+          enabledExchangeSet.has(normalized) ||
+          `Invalid exchange. Must be one of ${Array.from(enabledExchangeSet).join(', ')}`
+        )
+      }
     }
   );
 }
@@ -123,7 +136,7 @@ export function validateBotData(data: any) {
 /**
  * Standard success response
  */
-export function successResponse(data: any = null, status: number = 200) {
+export function successResponse(data: unknown = null, status: number = 200) {
   return NextResponse.json({
     success: true,
     data
@@ -133,14 +146,14 @@ export function successResponse(data: any = null, status: number = 200) {
 /**
  * Standard error response handler
  */
-export function handleApiError(error: any) {
-  logger.error('API operation error', { 
-    error: error instanceof Error ? error.message : error,
+export function handleApiError(error: unknown) {
+  const err = normalizeError(error)
+  logger.error('API operation error', err, {
     statusCode: error instanceof ApiError ? error.statusCode : 500
   });
   
   const status = error instanceof ApiError ? error.statusCode : 500;
-  const message = error.message || 'An unexpected error occurred';
+  const message = error instanceof Error ? error.message : 'An unexpected error occurred';
   
   return NextResponse.json({
     success: false,

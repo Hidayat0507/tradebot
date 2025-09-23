@@ -1,6 +1,6 @@
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 
 export interface BotData {
   id: string;
@@ -11,6 +11,7 @@ export interface BotData {
   webhook_secret: string;
   order_size?: number; // Percentage of available balance to use (25, 50, 75, or 100)
   name: string;
+  password?: string; // Bitget passphrase
 }
 
 /**
@@ -44,12 +45,17 @@ async function executeDirectAmountTrade(
     ...(isHyperliquid ? { slippage: 0.05 } : {})
   };
   
+  // For market orders: pass price for Hyperliquid and for BUY on exchanges like Bitget that require price
+  const orderPrice = orderType === 'limit'
+    ? alert.price
+    : (isHyperliquid || alert.action === 'buy' ? price : undefined);
+
   return await exchange.createOrder(
     alert.symbol,
     orderType,
     alert.action.toLowerCase(),
     alert.amount,
-    alert.price || undefined, // Only pass price for limit orders
+    orderPrice,
     orderOptions
   );
 }
@@ -65,17 +71,26 @@ async function calculateTradeAmount(
 ): Promise<number> {
   const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
   
-  // Determine if this is a spot or perp market from the symbol
-  const isSpot = alert.symbol.includes('/');
-  const marketType = isSpot ? 'spot' : 'swap';
+  // Determine market type: swap symbols in CCXT usually contain ':' (e.g., BTC/USDT:USDT)
+  const isSwap = alert.symbol.includes(':');
+  const marketType = isSwap ? 'swap' : 'spot';
   
-  // For Hyperliquid BUY orders, use USDC; for SELL orders, use the base asset from the symbol
-  let currency;
-  if (alert.action === 'buy') {
-    currency = 'USDC'; // Always use quote asset for buy
+  // Determine currency for balance based on exchange and side
+  // - Hyperliquid BUY: USDC (quote). SELL: base (e.g., UETH)
+  // - Other exchanges BUY: quote (e.g., USDT). SELL: base (e.g., BTC)
+  let currency: string;
+  if (isHyperliquid) {
+    if (alert.action === 'buy') {
+      currency = 'USDC';
+    } else {
+      currency = alert.symbol.split('/')[0];
+    }
   } else {
-    // For sell, use the base asset from the symbol (e.g., 'UETH' from 'UETH/USDC')
-    currency = alert.symbol.split('/')[0];
+    if (alert.action === 'buy') {
+      currency = alert.symbol.split('/')[1] || 'USDT';
+    } else {
+      currency = alert.symbol.split('/')[0];
+    }
   }
   
   logger.info('Starting balance calculation', {
@@ -124,13 +139,13 @@ async function calculateTradeAmount(
       throw new Error(`Currency ${currency} not found in ${marketType} balance`);
     }
   } catch (err: any) {
-    logger.error('Failed to fetch balance', { 
-      error: err.message,
+    const normalizedError = normalizeError(err)
+    logger.error('Failed to fetch balance', normalizedError, {
       currency,
       marketType,
       exchange: exchange.id
-    });
-    throw new Error(`Failed to fetch ${currency} ${marketType} balance: ${err.message}`);
+    })
+    throw new Error(`Failed to fetch ${currency} ${marketType} balance: ${normalizedError.message}`);
   }
   
   // Get available balance
@@ -163,25 +178,25 @@ async function calculateTradeAmount(
     roundedPositionSize: Math.floor(positionSize * 100000) / 100000
   });
   
-  // For Hyperliquid BUY orders, convert from USDC to the asset amount
+  // For BUY orders, convert quote balance to base amount
   let amount = positionSize;
-  if (isHyperliquid && alert.action === 'buy') {
-    // Calculate how much of the asset we can buy with our USDC
+  if (alert.action === 'buy') {
     amount = positionSize / price;
-    logger.info('Converted USDC to asset amount', {
-      positionSizeUSDC: positionSize,
+    logger.info('Converted quote to base amount for BUY', {
+      positionSizeQuote: positionSize,
       price,
       calculation: `${positionSize} / ${price}`,
-      rawAmount: amount
+      rawAmount: amount,
+      isHyperliquid
     });
-    
-    // Round down to 5 decimal places for Hyperliquid
-    amount = Math.floor(amount * 100000) / 100000;
-    logger.info('Rounded amount to 5 decimal places', {
-      rawAmount: positionSize / price,
-      roundedAmount: amount,
-      calculation: `Math.floor(${positionSize / price} * 100000) / 100000`
-    });
+
+    // Round down to 5 decimals for Hyperliquid; keep raw for others
+    if (isHyperliquid) {
+      amount = Math.floor(amount * 100000) / 100000;
+      logger.info('Rounded amount to 5 decimals (Hyperliquid)', {
+        roundedAmount: amount
+      });
+    }
   }
   
   // Only use minimum value as fallback if amount is invalid
@@ -236,8 +251,10 @@ async function executeRealOrder(
   const orderType = alert.price ? 'limit' : 'market';
   
   // For limit orders, use the alert price
-  // For market orders on Hyperliquid, we need to pass the current price for slippage calculation
-  const orderPrice = orderType === 'limit' ? alert.price : (isHyperliquid ? price : undefined);
+  // For market orders: pass price for Hyperliquid and for BUY on exchanges like Bitget that require price
+  const orderPrice = orderType === 'limit'
+    ? alert.price
+    : (isHyperliquid || alert.action === 'buy' ? price : undefined);
   
   logger.info('Creating order', { 
     type: orderType, 
@@ -368,8 +385,8 @@ export async function executeTrade(
     const order = await executeRealOrder(exchange, alert, calculatedAmount, price, isHyperliquid);
     return { order, calculatedAmount };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Failed to execute trade', { error, symbol: alert.symbol, action: alert.action });
-    throw new ApiError(`Failed to execute trade: ${message}`, 500);
+    const normalizedError = normalizeError(error)
+    logger.error('Failed to execute trade', normalizedError, { symbol: alert.symbol, action: alert.action })
+    throw new ApiError(`Failed to execute trade: ${normalizedError.message}`, 500);
   }
-} 
+}

@@ -23,7 +23,7 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
     ['bot_id', 'symbol', 'action', 'secret'],
     {
       action: (value) => 
-        ['buy', 'sell'].includes(value) || 
+        (typeof value === 'string' && ['buy', 'sell'].includes(value)) || 
         'Invalid action (must be buy or sell)',
       price: (value) => {
         // Convert string to number if needed

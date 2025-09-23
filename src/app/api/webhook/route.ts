@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+export const runtime = 'nodejs';
 import { ApiError } from '@/app/api/_middleware/api-handler';
 import { 
   handleApiError,
@@ -9,19 +10,19 @@ import {
   processWebhookAlert
 } from '@/app/api/_middleware/webhook';
 import { createClient, createServiceClient } from '@/utils/supabase/server';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 
 export async function POST(request: NextRequest) {
   try {
     // Parse and validate the alert
     const data = await request.json();
     
-    console.log('Raw webhook request payload:', JSON.stringify(data));
+    logger.debug('Raw webhook request payload', { payloadPreview: JSON.stringify(data).slice(0, 500) });
     
     const alert = validateWebhookAlert(data);
 
     // Log the incoming request for debugging
-    console.log('Validated webhook alert:', {
+    logger.debug('Validated webhook alert', {
       botId: alert.bot_id,
       botIdType: typeof alert.bot_id,
       botIdLength: alert.bot_id.length,
@@ -34,38 +35,37 @@ export async function POST(request: NextRequest) {
     const serviceClient = createServiceClient();
 
     // Log a message before database query
-    console.log('Querying database for bot with ID:', alert.bot_id);
+    logger.debug('Querying database for bot', { botId: alert.bot_id });
     
     // Direct debug query to list all bots
-    console.log('Listing available bots:');
+    logger.debug('Listing available bots');
     const { data: allBots, error: listError } = await serviceClient
       .from('bots')
       .select('id, name')
       .limit(10);
       
     if (allBots && allBots.length > 0) {
-      console.log('Available bots:');
-      allBots.forEach(b => console.log(`- ID: "${b.id}" (${b.id.length} chars), Name: ${b.name}`));
+      logger.debug('Available bots summary', { bots: allBots.map(b => ({ id: b.id, name: b.name, len: b.id.length })) });
     } else {
-      console.log('No bots found in database:', listError);
+      logger.warn('No bots found in database', { error: listError });
     }
     
     // Try exact match first
-    logger.debug('Trying exact match with ID:', JSON.stringify(alert.bot_id));
+    logger.debug('Trying exact match with ID', { botId: alert.bot_id });
     let { data: bot, error } = await serviceClient
       .from('bots')
-      .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
+      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size')
       .eq('id', alert.bot_id)
       .single();
       
     if (error || !bot) {
       // Try with trimmed ID
       const trimmedId = alert.bot_id.trim();
-      logger.debug('Trying with trimmed ID:', JSON.stringify(trimmedId));
+      logger.debug('Trying with trimmed ID', { botId: trimmedId });
       
-      ({ data: bot, error } = await serviceClient
-        .from('bots')
-        .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
+        ({ data: bot, error } = await serviceClient
+          .from('bots')
+          .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size')
         .eq('id', trimmedId)
         .single());
         
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         logger.debug('Trying case-insensitive match as last resort');
         ({ data: bot, error } = await serviceClient
           .from('bots')
-          .select('id, exchange, api_key, api_secret, user_id, webhook_secret, name, max_position_size')
+          .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size')
           .ilike('id', alert.bot_id)
           .single());
       }
@@ -82,28 +82,30 @@ export async function POST(request: NextRequest) {
 
     if (error || !bot) {
       // Log more details about the failed query
-      console.error('Bot not found with ID:', alert.bot_id);
+      logger.warn('Bot not found with ID', { botId: alert.bot_id, error });
       throw new ApiError('Bot not found', 404);
     }
 
-    console.log('Bot found:', {
-      id: bot.id,
-      name: bot.name,
-      exchange: bot.exchange
-    });
+    logger.info('Bot found for webhook', { id: bot.id, name: bot.name, exchange: bot.exchange });
+
+    // Enforce enabled flag
+    if ((bot as any).enabled === false) {
+      logger.warn('Bot is disabled; rejecting webhook', { botId: bot.id });
+      throw new ApiError('Bot is disabled', 403);
+    }
 
     // Verify webhook secret
-    console.log('Verifying webhook secret:');
-    console.log('- Received secret:', data.secret ? `${data.secret.substring(0, 8)}...` : 'none');
-    console.log('- Expected secret:', bot.webhook_secret ? `${bot.webhook_secret.substring(0, 8)}...` : 'none');
-    console.log('- Match:', data.secret === bot.webhook_secret);
+    logger.debug('Verifying webhook secret', {
+      received: data.secret ? `${data.secret.substring(0, 4)}***` : 'none',
+      expected: bot.webhook_secret ? `${bot.webhook_secret.substring(0, 4)}***` : 'none'
+    });
     
     if (data.secret !== bot.webhook_secret) {
       console.warn('Invalid webhook secret provided');
       throw new ApiError('Invalid webhook secret', 401);
     }
 
-    console.log('Webhook secret verified, processing alert');
+    logger.info('Webhook secret verified, processing alert', { botId: bot.id });
 
     // Use order_size from webhook or max_position_size from bot config
     const botWithOrderSize = {
@@ -116,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     return successResponse({ success: true, trade });
   } catch (error) {
-    console.error('Failed to process webhook', error);
+    logger.error('Failed to process webhook', normalizeError(error));
     return handleApiError(error);
   }
 }

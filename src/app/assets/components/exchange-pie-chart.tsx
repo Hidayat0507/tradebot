@@ -61,7 +61,7 @@ export default function ExchangePieChart() {
               let rawBalance;
               try {
                 rawBalance = await exchangeInstance.fetchBalance();
-              } catch (e) {
+              } catch (_e) {
                 // Try with spot type if normal fails
                 try {
                   rawBalance = await exchangeInstance.fetchBalance({ type: 'spot' });
@@ -101,9 +101,9 @@ export default function ExchangePieChart() {
         const labels = Object.keys(assetBalances);
         const dataValues = Object.values(assetBalances);
         const data = {
-          labels: labels.map((asset, i) => {
+          labels: labels.map((asset) => {
             const amount = assetBalances[asset];
-            const percent = ((amount / total) * 100).toFixed(2);
+            const percent = total > 0 ? ((amount / total) * 100).toFixed(2) : '0.00';
             return `${asset}: ${amount} (${percent}%)`;
           }),
           datasets: [

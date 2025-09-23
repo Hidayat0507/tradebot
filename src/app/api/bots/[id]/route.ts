@@ -8,7 +8,13 @@ import {
   validateFields
 } from '@/app/api/_middleware/api-handler'
 import { encrypt } from '@/utils/encryption'
-import { logger } from '@/lib/logging'
+import { logger, normalizeError } from '@/lib/logging'
+import { listEnabledExchanges } from '@/lib/exchanges/registry'
+import type { SupportedExchange } from '@/lib/database/schema'
+
+const enabledExchangeSet = new Set<SupportedExchange>(
+  listEnabledExchanges().map((plugin) => plugin.id)
+)
 
 // GET /api/bots/[id] - Get a specific bot's details
 export async function GET(
@@ -40,9 +46,15 @@ export async function PUT(
         body,
         [],
         {
-          exchange: (value) => 
-            ['binance', 'hyperliquid'].includes(value) || 
-            'Invalid exchange. Must be binance or hyperliquid'
+          exchange: (value: unknown) => {
+            if (typeof value !== 'string') {
+              return 'Invalid exchange selection'
+            }
+            const normalized = value.toLowerCase() as SupportedExchange
+            return enabledExchangeSet.has(normalized)
+              ? true
+              : `Invalid exchange. Must be one of ${Array.from(enabledExchangeSet).join(', ')}`
+          }
         }
       )
     }
@@ -56,8 +68,19 @@ export async function PUT(
         updateData.api_secret = await encrypt(updateData.api_secret)
         logger.info('API secret encrypted successfully', { botId: id })
       } catch (encryptError) {
-        logger.error('Failed to encrypt API secret', { error: encryptError, botId: id })
+        logger.error('Failed to encrypt API secret', normalizeError(encryptError), { botId: id })
         throw new ApiError('Failed to encrypt API secret', 500)
+      }
+    }
+
+    // Encrypt password if provided
+    if (updateData.password) {
+      try {
+        updateData.password = await encrypt(updateData.password)
+        logger.info('Password encrypted successfully', { botId: id })
+      } catch (encryptError) {
+        logger.error('Failed to encrypt password', normalizeError(encryptError), { botId: id })
+        throw new ApiError('Failed to encrypt password', 500)
       }
     }
 
@@ -69,7 +92,7 @@ export async function PUT(
       .single()
 
     if (error) {
-      logger.error('Failed to update bot', { error, botId: id, userId: user.id })
+      logger.error('Failed to update bot', normalizeError(error), { botId: id, userId: user.id })
       throw new ApiError('Failed to update bot', 400)
     }
 
@@ -95,7 +118,7 @@ export async function DELETE(
       .eq('id', id)
 
     if (error) {
-      logger.error('Failed to delete bot', { error, botId: id, userId: user.id })
+      logger.error('Failed to delete bot', normalizeError(error), { botId: id, userId: user.id })
       throw new ApiError('Failed to delete bot', 400)
     }
 

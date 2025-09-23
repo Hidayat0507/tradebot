@@ -1,6 +1,6 @@
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 
 /**
  * Save trade to database
@@ -64,15 +64,20 @@ export async function saveTrade(
     .single();
 
   if (error) {
-    logger.error('Failed to save trade', { error, botId, symbol: alert.symbol });
+    const err = normalizeError(error)
+    logger.error('Failed to save trade', err, { botId, symbol: alert.symbol });
     
     // For debugging purposes, let's log more details about the RLS issue
     if (error.message.includes('row-level security')) {
-      logger.error('RLS policy violation details', { 
-        userId, 
-        supabaseAuthUserId: supabase.auth?.user?.()?.id,
-        tradeUserId: trade.user_id
-      });
+      logger.error(
+        'RLS policy violation details',
+        new Error('Row-level security violation'),
+        {
+          userId,
+          supabaseAuthUserId: supabase.auth?.user?.()?.id,
+          tradeUserId: trade.user_id,
+        }
+      );
     }
     
     throw new ApiError(`Failed to save trade: ${error.message}`, 500);

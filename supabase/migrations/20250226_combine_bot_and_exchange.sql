@@ -20,7 +20,7 @@ CREATE TABLE public.bots (
     api_secret VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    CONSTRAINT exchange_check CHECK (exchange IN ('binance', 'hyperliquid'))
+    CONSTRAINT exchange_check CHECK (exchange IN ('hyperliquid', 'bitget'))
 );
 
 -- Create an index on user_id for faster lookups

@@ -8,10 +8,11 @@ import {
 import {
   createExchangeClient,
   fetchBalance,
+  resolveExchangeCredentials,
   ExchangeCredentials
 } from '@/app/api/_middleware/exchange-middleware';
 import { decrypt } from '@/utils/encryption';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,13 +27,14 @@ export async function GET(request: NextRequest) {
     
     const { data: bot, error } = await supabase
       .from('bots')
-      .select('exchange, api_key, api_secret')
+      .select('exchange, api_key, api_secret, password')
       .eq('id', botId)
       .eq('user_id', user.id)
       .single();
 
     if (error || !bot) {
-      logger.error('Bot not found for balance fetch', { error, botId, userId: user.id });
+      const err = normalizeError(error ?? 'Bot lookup failed')
+      logger.error('Bot not found for balance fetch', err, { botId, userId: user.id })
       throw new ApiError('Bot not found', 404);
     }
 
@@ -54,24 +56,26 @@ export async function GET(request: NextRequest) {
           decryptedPreview: decrypted.substring(0, 3) + '...'
         });
       } catch (decryptError) {
-        logger.error('Decryption test failed', { 
-          error: decryptError, 
-          botId,
-          errorMessage: decryptError instanceof Error ? decryptError.message : 'Unknown error'
-        });
+        const err = normalizeError(decryptError)
+        logger.error('Decryption test failed', err, { botId })
       }
     }
 
     // Validate that we have the required credentials
     if (!bot.api_key || !bot.api_secret) {
-      logger.error('Missing API credentials for balance fetch', { botId, userId: user.id });
+      logger.error(
+        'Missing API credentials for balance fetch',
+        new Error('Missing API credentials'),
+        { botId, userId: user.id }
+      )
       throw new ApiError('Please add API credentials to your bot to fetch balance', 400);
     }
 
     // Create exchange client with credentials
     const credentials: ExchangeCredentials = {
       apiKey: bot.api_key,
-      apiSecret: bot.api_secret
+      apiSecret: bot.api_secret,
+      password: bot.password || undefined
     };
 
     try {
@@ -84,18 +88,21 @@ export async function GET(request: NextRequest) {
       });
       
       const exchange_client = await createExchangeClient(bot.exchange, credentials);
+      const resolvedCredentials = await resolveExchangeCredentials(bot.exchange, credentials);
+      if (!resolvedCredentials) {
+        throw new ApiError('Missing exchange credentials', 400);
+      }
       
       // Log successful client creation
       logger.info('Successfully created exchange client', { exchange: bot.exchange, botId });
       
-      const balance = await fetchBalance(exchange_client, bot.exchange, credentials);
+      const balance = await fetchBalance(exchange_client, bot.exchange, resolvedCredentials);
       return successResponse({ balance });
     } catch (clientError: any) {
       // Provide more specific error message based on the error
       if (clientError instanceof ApiError) {
         if (clientError.message.includes('decrypt')) {
-          logger.error('Decryption error during balance fetch', { 
-            error: clientError, 
+          logger.error('Decryption error during balance fetch', clientError, {
             exchange: bot.exchange,
             botId,
             userId: user.id
@@ -111,9 +118,8 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      logger.error('Exchange client or balance fetch error', { 
-        error: clientError, 
-        errorMessage: clientError.message,
+      const err = normalizeError(clientError)
+      logger.error('Exchange client or balance fetch error', err, {
         exchange: bot.exchange,
         botId,
         userId: user.id
@@ -121,7 +127,7 @@ export async function GET(request: NextRequest) {
       throw new ApiError('Failed to fetch balance from exchange. Please check your API credentials and try again.', 500);
     }
   } catch (error) {
-    logger.error('Failed to fetch balance', { error });
+    logger.error('Failed to fetch balance', normalizeError(error));
     return handleApiError(error);
   }
 }

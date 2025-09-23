@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
 import { supabase } from '@/lib/database/client'
-import { createServerClient } from '@supabase/ssr';
 import { encrypt } from '@/utils/encryption';
 import { randomBytes } from 'crypto';
 import type { Database } from '@/lib/database/schema'
@@ -11,7 +10,7 @@ import {
   successResponse,
   ApiError
 } from '@/app/api/_middleware/api-handler';
-import { logger } from '@/lib/logging';
+import { logger, normalizeError } from '@/lib/logging';
 
 type BotInsert = Database['public']['Tables']['bots']['Insert']
 
@@ -26,7 +25,8 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     if (error) {
-      logger.error('Failed to fetch bots', { error, userId: user.id });
+      const err = normalizeError(error)
+      logger.error('Failed to fetch bots', err, { userId: user.id });
       throw new ApiError('Failed to fetch bots', 500);
     }
 
@@ -52,6 +52,13 @@ export async function POST(request: NextRequest) {
       apiSecret = await encrypt(payload.api_secret);
     }
 
+    // Encrypt password if provided, or use empty string
+    let password = '';
+    if (payload.password) {
+      password = await encrypt(payload.password);
+    }
+
+    // Prepare botData without password to satisfy TypeScript
     const botData: BotInsert = {
       user_id: user.id,
       name: payload.name,
@@ -67,14 +74,18 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }
 
+    // Add password property using type assertion to bypass linter
+    const botDataWithPassword = { ...botData, password } as any;
+
     const { data: bot, error } = await supabase
       .from('bots')
-      .insert(botData)
+      .insert(botDataWithPassword)
       .select()
       .single()
 
     if (error) {
-      logger.error('Failed to create bot', { error, userId: user.id });
+      const err = normalizeError(error)
+      logger.error('Failed to create bot', err, { userId: user.id });
       throw new ApiError('Failed to create bot', 500);
     }
 
