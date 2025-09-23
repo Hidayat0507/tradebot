@@ -1,7 +1,6 @@
 'use client'
 
 import { createClient } from '@/utils/supabase/client'
-import { headers } from 'next/headers'
 
 type AuthResponse = 
   | { error: string; success?: never; message?: never }

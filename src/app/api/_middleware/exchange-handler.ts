@@ -57,7 +57,7 @@ export async function getBotWithCredentials(
 
   try {
     getExchangePlugin(data.exchange as SupportedExchange);
-  } catch (_pluginError) {
+  } catch {
     throw new ExchangeError(`Invalid exchange type: ${data.exchange}`, 400);
   }
 
@@ -85,8 +85,8 @@ export async function createExchangeClientFromBot(bot: BotWithCredentials) {
     credentials.apiSecret = await decrypt(bot.api_secret)
   }
 
-  if ((bot as any).password) {
-    credentials.password = await decrypt((bot as any).password)
+  if (bot.password) {
+    credentials.password = await decrypt(bot.password)
   }
 
   return plugin.createClient(credentials)

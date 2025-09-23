@@ -2,7 +2,7 @@
 
 import { login, signup } from './actions'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import React, { Suspense } from 'react';
+import { Suspense } from 'react'
 
 const formSchema = z.object({
   email: z.string().email('Invalid email address'),

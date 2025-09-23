@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { User } from '@supabase/supabase-js'
-import { LogOut, Settings, User as UserIcon } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ProfileMenu({ user }: { user: User | null }) {

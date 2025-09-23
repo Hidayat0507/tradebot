@@ -50,7 +50,8 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
   );
 
   // Remove secret before returning
-  const { secret, ...alertWithoutSecret } = alert;
+  delete alert.secret;
+  const alertWithoutSecret = alert;
   
   // Convert string values to numbers
   const result = { ...alertWithoutSecret } as TradingViewSignal;

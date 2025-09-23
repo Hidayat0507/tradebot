@@ -202,7 +202,6 @@ GET /api/webhook/status
 ## TradingView Integration
 
 ### TradingView Alert Setup
-
 1. Create a new alert in TradingView
 2. In the "Alert message" field, use the following JSON template:
 
@@ -248,4 +247,6 @@ This means that multiple trades executed within these time windows will use the 
 
 6. **Use Order Size Wisely**: Start with smaller order sizes (25% or 50%) when testing new strategies
 
-7. **Check Status Endpoint**: Verify if the server is in simulation mode before executing important trades 
+7. **Check Status Endpoint**: Verify if the server is in simulation mode before executing important trades
+
+

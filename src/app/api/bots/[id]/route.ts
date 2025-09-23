@@ -37,7 +37,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await props.params;
-    const { bot, supabase, user } = await getBotWithOwnership(request, id)
+    const { bot: _bot, supabase, user } = await getBotWithOwnership(request, id)
     const body = await request.json() as BotFormData
     
     // Validate update data

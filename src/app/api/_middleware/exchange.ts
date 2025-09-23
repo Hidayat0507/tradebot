@@ -79,7 +79,7 @@ export async function validateAndStoreCredentials(
     if (apiSecret) {
       try {
         encryptedSecret = await encrypt(apiSecret)
-      } catch (error) {
+      } catch {
         throw new ExchangeError('Failed to encrypt API credentials', 500)
       }
     }
@@ -88,7 +88,7 @@ export async function validateAndStoreCredentials(
     if (password) {
       try {
         encryptedPassword = await encrypt(password)
-      } catch (error) {
+      } catch {
         throw new ExchangeError('Failed to encrypt API credentials', 500)
       }
     }
