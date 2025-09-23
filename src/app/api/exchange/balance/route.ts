@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       
       const balance = await fetchBalance(exchange_client, bot.exchange, resolvedCredentials);
       return successResponse({ balance });
-    } catch (clientError: any) {
+    } catch (clientError: unknown) {
       // Provide more specific error message based on the error
       if (clientError instanceof ApiError) {
         if (clientError.message.includes('decrypt')) {

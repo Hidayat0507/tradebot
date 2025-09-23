@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Initialize Supabase clients
-    const supabase = await createClient(request);
+    const _supabase = await createClient(request);
     const serviceClient = createServiceClient();
 
     // Log a message before database query

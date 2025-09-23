@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useParams } from "next/navigation"
+import { useParams } from "next/navigation"
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -27,14 +27,8 @@ interface BotWithWebhookSecret extends Bot {
   webhook_secret: string;
 }
 
-interface WebhookSecretSectionProps {
-  bot: BotWithWebhookSecret;
-  onSecretRegenerated: (newSecret: string) => void;
-}
-
 export default function BotDetailsPage() {
   const params = useParams<{ id: string }>()
-  const router = useRouter()
   const [bot, setBot] = useState<Bot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,8 +39,6 @@ export default function BotDetailsPage() {
     const loadBot = async () => {
       try {
         setError(null)
-        console.log('Fetching bot with ID:', params.id);
-        
         const { data, error: loadError } = await supabase
           .from('bots')
           .select('*')
@@ -54,15 +46,14 @@ export default function BotDetailsPage() {
           .single()
 
         if (loadError) {
-          console.error('Error fetching bot:', loadError);
           throw loadError
         }
 
-        console.log('Fetched bot:', data);
         setBot(data)
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch bot'
         console.error('Failed to fetch bot:', err)
-        setError(err.message)
+        setError(message)
       } finally {
         setLoading(false)
       }

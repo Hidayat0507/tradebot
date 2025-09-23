@@ -64,8 +64,9 @@ export function BotBalance({ botId }: BotBalanceProps) {
       })
 
       setBalance(formatted)
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch balance')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch balance'
+      setError(message)
     } finally {
       setLoading(false)
     }

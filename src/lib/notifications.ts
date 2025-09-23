@@ -39,7 +39,7 @@ export class NotificationService {
       if (!response.ok) {
         throw new Error(`Discord webhook failed: ${response.statusText}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to send notification', normalizeError(error), {
         webhookUrl: this.discordWebhookUrl
       });
@@ -47,7 +47,10 @@ export class NotificationService {
   }
 
   // Trade execution errors
-  async notifyTradeError(error: Error, tradeDetails: any) {
+  async notifyTradeError(
+    error: Error,
+    tradeDetails: { symbol?: string; action?: string; price?: number }
+  ) {
     await this.sendNotification({
       title: '❌ Trade Execution Failed',
       description: error.message,

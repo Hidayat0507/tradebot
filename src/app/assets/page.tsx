@@ -31,8 +31,9 @@ export default function AssetsPage() {
           .select('id, name, exchange, pair');
         if (error) throw error;
         setBots(data || []);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load bots'
+        setError(message)
       } finally {
         setLoading(false);
       }

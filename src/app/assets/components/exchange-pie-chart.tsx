@@ -61,7 +61,7 @@ export default function ExchangePieChart() {
               let rawBalance;
               try {
                 rawBalance = await exchangeInstance.fetchBalance();
-              } catch (_e) {
+              } catch {
                 // Try with spot type if normal fails
                 try {
                   rawBalance = await exchangeInstance.fetchBalance({ type: 'spot' });
