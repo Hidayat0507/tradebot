@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import {
   getBotWithOwnership,
   handleApiError,
@@ -16,14 +16,15 @@ export async function POST(
     const { id } = await props.params;
     const { supabase, user } = await getBotWithOwnership(request, id);
     
-    // Generate webhook secret
+    // Generate webhook secret and hash for storage
     const webhookSecret = randomBytes(32).toString('hex');
+    const webhookSecretHash = 'sha256:' + createHash('sha256').update(webhookSecret).digest('hex');
 
     // Update the bot
     const { error } = await supabase
       .from('bots')
       .update({ 
-        webhook_secret: webhookSecret,
+        webhook_secret: webhookSecretHash,
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
@@ -34,7 +35,7 @@ export async function POST(
     }
 
     logger.info('Webhook secret regenerated', { botId: id, userId: user.id });
-    // Return the new webhook secret directly
+    // Return the new webhook secret directly (plaintext shown once)
     return successResponse({ webhook_secret: webhookSecret });
   } catch (error) {
     return handleApiError(error);

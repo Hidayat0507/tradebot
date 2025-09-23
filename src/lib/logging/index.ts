@@ -10,6 +10,76 @@ interface LogEntry {
 }
 
 class Logger {
+  private isProduction(): boolean {
+    try {
+      return process.env.NODE_ENV === 'production';
+    } catch {
+      return false;
+    }
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    if (level === 'debug' && this.isProduction()) {
+      return false;
+    }
+    return true;
+  }
+
+  private redactKey(key: string): boolean {
+    const k = key.toLowerCase();
+    // redact obvious secret-bearing keys
+    return (
+      k.includes('secret') ||
+      k === 'password' ||
+      k.includes('password') ||
+      k.includes('token') ||
+      k === 'authorization' ||
+      k === 'auth' ||
+      k === 'api_key' ||
+      k === 'apikey' ||
+      k === 'apiKey'.toLowerCase() ||
+      k === 'api_secret' ||
+      k === 'webhook_secret' ||
+      k === 'set-cookie' ||
+      k === 'cookie' ||
+      k.includes('private') ||
+      k === 'pwd' ||
+      k === 'passwd'
+    );
+  }
+
+  private sanitizeValue(value: unknown, keyPath: string[] = []): unknown {
+    // Redact by key
+    const lastKey = keyPath[keyPath.length - 1];
+    if (lastKey && this.redactKey(lastKey)) {
+      return '[REDACTED]';
+    }
+
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') {
+      // Truncate very long strings to avoid logging payloads
+      const limit = 200;
+      return value.length > limit ? value.slice(0, limit) + '…' : value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v, i) => this.sanitizeValue(v, [...keyPath, String(i)]));
+    }
+    if (typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      const sanitized: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        sanitized[k] = this.sanitizeValue(v, [...keyPath, k]);
+      }
+      return sanitized;
+    }
+    return value;
+  }
+
+  private sanitizeContext(context?: LogContext): LogContext | undefined {
+    if (!context) return context;
+    return this.sanitizeValue(context, []) as LogContext;
+  }
+
   private formatError(error: Error): Error {
     const formattedError = new Error(error.message);
     formattedError.name = error.name;
@@ -30,12 +100,15 @@ class Logger {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context,
+      context: this.sanitizeContext(context),
       error: error ? this.formatError(error) : undefined
     };
   }
 
   private log(entry: LogEntry): void {
+    if (!this.shouldLog(entry.level)) {
+      return;
+    }
     // In production, you might want to send this to a logging service
     // For now, we'll use console.log with proper formatting
     const output = {

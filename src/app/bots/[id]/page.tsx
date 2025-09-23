@@ -172,7 +172,7 @@ export default function BotDetailsPage() {
   "symbol": "${bot.pair}",
   "action": "{{strategy.order.action}}",
   "order_size": 50,
-  "secret": "${(bot as any).webhook_secret || 'YOUR_WEBHOOK_SECRET'}"
+  "secret": "${(!bot.webhook_secret || bot.webhook_secret.startsWith('sha256:')) ? 'YOUR_WEBHOOK_SECRET' : bot.webhook_secret}"
 }`}
                     </pre>
                     <div className="text-xs text-gray-600 dark:text-gray-400">

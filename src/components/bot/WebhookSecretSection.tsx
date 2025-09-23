@@ -78,6 +78,15 @@ export function WebhookSecretSection({ bot, onSecretRegenerated }: WebhookSecret
       return;
     }
 
+    // If stored secret is hashed (sha256:...), prevent copying and ask to regenerate
+    if (bot.webhook_secret.startsWith('sha256:')) {
+      toast({
+        title: 'Secret not available',
+        description: 'For security, the stored secret is hashed. Click Regenerate Secret to get a new one.',
+      });
+      return;
+    }
+
     navigator.clipboard.writeText(bot.webhook_secret);
     toast({
       title: 'Copied',

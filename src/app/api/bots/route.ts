@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 // note: using request-scoped Supabase from getAuthenticatedUser
 import { encrypt } from '@/utils/encryption';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import type { Database } from '@/lib/database/schema'
 import {
   getAuthenticatedUser,
@@ -43,8 +43,9 @@ export async function POST(request: NextRequest) {
 
     validateBotData(payload);
 
-    // Generate webhook secret
+    // Generate webhook secret (plaintext shown only in UI after creation) and hash for storage
     const webhookSecret = randomBytes(32).toString('hex')
+    const webhookSecretHash = 'sha256:' + createHash('sha256').update(webhookSecret).digest('hex')
 
     // Encrypt API secret if provided, or use empty string
     let apiSecret = '';
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       enabled: payload.enabled || false,
       api_key: payload.api_key || '',
       api_secret: apiSecret,
-      webhook_secret: webhookSecret,
+      webhook_secret: webhookSecretHash,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
