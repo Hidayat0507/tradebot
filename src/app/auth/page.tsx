@@ -2,7 +2,7 @@
 
 import { login, signup, signInWithGoogle } from './actions'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/form"
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/utils/supabase/client'
 
 const authSchema = z.object({
   username: z.string().optional(),
@@ -34,6 +35,7 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClient()
 
   const form = useForm<AuthFormValues>({
     resolver: zodResolver(authSchema),
@@ -44,6 +46,17 @@ export default function AuthPage() {
       confirmPassword: '',
     },
   })
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        router.push('/dashboard')
+      }
+    }
+    checkUser()
+  }, [supabase, router])
 
   const onSubmit = async (data: AuthFormValues) => {
     setError(null)

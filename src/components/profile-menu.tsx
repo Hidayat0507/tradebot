@@ -22,7 +22,7 @@ export default function ProfileMenu({ user }: { user: User | null }) {
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (!error) {
-      router.push('/auth')
+      router.push('/')
     }
   }
 
