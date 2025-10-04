@@ -19,7 +19,7 @@ export function isAdminUser(user: Pick<User, 'email'>) {
   return getAdminEmailSet().has(user.email.toLowerCase())
 }
 
-type Supabase = SupabaseClient<Database>
+type Supabase = SupabaseClient<any>
 
 export async function fetchSubscriptionRecord(supabase: Supabase) {
   const { data, error } = await supabase

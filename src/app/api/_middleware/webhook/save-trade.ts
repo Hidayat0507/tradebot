@@ -9,7 +9,7 @@ import type { Database } from '@/lib/database/schema';
  * Save trade to database
  */
 export async function saveTrade(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient<any>,
   userId: string,
   botId: string,
   order: OrderResult,
@@ -40,7 +40,7 @@ export async function saveTrade(
     }
   }
 
-  const trade = {
+  const trade: Database['public']['Tables']['trades']['Insert'] = {
     user_id: userId,
     external_id: order.id,
     bot_id: botId,
