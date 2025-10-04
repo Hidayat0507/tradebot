@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { StatsCard } from "@/components/dashboard/stats-card"
 import MarketOverview from './components/market-overview'
 import TradingInsights from './components/trading-insights'
+import ActivePositions from './components/active-positions'
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -277,44 +278,14 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Market and Positions Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3 text-xl font-semibold text-gray-900 dark:text-white">
-                <svg 
-                  className="w-6 h-6 text-blue-500" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth="2" 
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" 
-                  />
-                </svg>
-                Active Positions
-              </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-300">
-                Your current open trading positions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center h-32 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-800 dark:text-gray-200">
-                  {activeTrades > 0 ? `${activeTrades} active positions` : 'No active positions'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Active Positions Section with Unrealized P&L */}
+        <ActivePositions trades={trades} />
 
-          <MarketOverview />
-        </div>
+        {/* Market Overview Section */}
+        <MarketOverview />
 
         {/* Trading Insights Section */}
-        <TradingInsights />
+        <TradingInsights trades={trades} />
 
         {/* Activity Logs */}
         <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out">

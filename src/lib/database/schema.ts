@@ -108,6 +108,38 @@ export interface Database {
           updated_at?: string
         }
       }
+      logs: {
+        Row: {
+          id: string
+          user_id: string
+          bot_id: string
+          timestamp: string
+          type: 'info' | 'warning' | 'error' | 'success'
+          message: string
+          details: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          bot_id: string
+          timestamp?: string
+          type: 'info' | 'warning' | 'error' | 'success'
+          message: string
+          details?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          bot_id?: string
+          timestamp?: string
+          type?: 'info' | 'warning' | 'error' | 'success'
+          message?: string
+          details?: Json | null
+          created_at?: string
+        }
+      }
       exchange_config: {
         Row: {
           id: string

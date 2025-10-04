@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { 
   Card, 
   CardContent, 
@@ -9,11 +9,50 @@ import {
   CardDescription 
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 
-const TradingInsights: React.FC = () => {
-  const totalProfit = 0
-  const winRate = 0
-  const totalTrades = 0
+interface Trade {
+  pnl: number | null
+  status: string
+  side: string
+}
+
+interface TradingInsightsProps {
+  trades: Trade[]
+}
+
+const TradingInsights: React.FC<TradingInsightsProps> = ({ trades }) => {
+  const insights = useMemo(() => {
+    // Filter out trades without P&L (usually buy orders or open positions)
+    const tradesWithPnL = trades.filter(t => t.pnl !== null && t.pnl !== undefined)
+    
+    // Calculate total profit/loss from all closed trades with P&L
+    const totalProfit = tradesWithPnL.reduce((sum, trade) => sum + (trade.pnl || 0), 0)
+    
+    // Calculate win rate (only from trades with P&L)
+    const winningTrades = tradesWithPnL.filter(t => (t.pnl || 0) > 0).length
+    const losingTrades = tradesWithPnL.filter(t => (t.pnl || 0) < 0).length
+    const totalClosedTrades = tradesWithPnL.length
+    const winRate = totalClosedTrades > 0 ? (winningTrades / totalClosedTrades) * 100 : 0
+    
+    // Total number of all trades
+    const totalTrades = trades.length
+    
+    // Profit trend
+    const isProfitable = totalProfit > 0
+    const profitChange = totalProfit // Could calculate % change if we track historical data
+    
+    return {
+      totalProfit,
+      winRate,
+      totalTrades,
+      winningTrades,
+      losingTrades,
+      totalClosedTrades,
+      isProfitable,
+      profitChange
+    }
+  }, [trades])
 
   return (
     <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out">
@@ -41,38 +80,57 @@ const TradingInsights: React.FC = () => {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Total Profit */}
           <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl">
-            <h3 className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Profit</h3>
+            <h3 className="text-sm text-gray-600 dark:text-gray-400 mb-2">Realized P&L</h3>
             <div className="flex items-center justify-between">
-              <span className="text-2xl font-bold text-green-600">
-                ${totalProfit.toLocaleString()}
+              <span className={`text-2xl font-bold ${insights.isProfitable ? 'text-green-600' : 'text-red-600'}`}>
+                ${insights.totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                N/A
+              <Badge 
+                variant={insights.isProfitable ? 'default' : 'destructive'} 
+                className={insights.isProfitable 
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
+                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'}
+              >
+                {insights.isProfitable ? (
+                  <TrendingUp className="w-3 h-3 mr-1 inline" />
+                ) : (
+                  <TrendingDown className="w-3 h-3 mr-1 inline" />
+                )}
+                {insights.totalClosedTrades} trades
               </Badge>
             </div>
           </div>
           
+          {/* Win Rate */}
           <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl">
             <h3 className="text-sm text-gray-600 dark:text-gray-400 mb-2">Win Rate</h3>
             <div className="flex items-center justify-between">
               <span className="text-2xl font-bold text-blue-600">
-                {winRate}%
+                {insights.winRate.toFixed(1)}%
               </span>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                Pending
+              <Badge 
+                variant="secondary" 
+                className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
+              >
+                {insights.winningTrades}W / {insights.losingTrades}L
               </Badge>
             </div>
           </div>
           
+          {/* Total Trades */}
           <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl">
             <h3 className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Trades</h3>
             <div className="flex items-center justify-between">
               <span className="text-2xl font-bold text-purple-600">
-                {totalTrades}
+                {insights.totalTrades}
               </span>
-              <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
-                Calculating
+              <Badge 
+                variant="outline" 
+                className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+              >
+                {insights.totalClosedTrades} closed
               </Badge>
             </div>
           </div>
