@@ -105,7 +105,13 @@ export default function AssetsPage() {
   }, [supabase]);
 
   const fetchBotBalance = useCallback(async (botId: string) => {
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    let timeoutId: NodeJS.Timeout | undefined = undefined;
+
     try {
+      timeoutId = setTimeout(() => controller.abort(), 18000); // 18 second timeout (before Vercel's 20s limit)
+      
       setBalances(prev => new Map(prev).set(botId, {
         botId,
         balance: {},
@@ -116,7 +122,8 @@ export default function AssetsPage() {
 
       const response = await fetch(`/api/exchange/balance?botId=${encodeURIComponent(botId)}`, {
         method: 'GET',
-        cache: 'no-store'
+        cache: 'no-store',
+        signal: controller.signal // Add abort signal for timeout
       });
 
       if (!response.ok) {
@@ -166,14 +173,29 @@ export default function AssetsPage() {
         error: null
       }));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch balance';
-      setBalances(prev => new Map(prev).set(botId, {
-        botId,
-        balance: {},
-        usdValue: 0,
-        loading: false,
-        error: message
-      }));
+      // Handle AbortError (timeout) specifically
+      if (err instanceof Error && err.name === 'AbortError') {
+        setBalances(prev => new Map(prev).set(botId, {
+          botId,
+          balance: {},
+          usdValue: 0,
+          loading: false,
+          error: 'Request timeout - exchange may be slow or unreachable'
+        }));
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to fetch balance';
+        setBalances(prev => new Map(prev).set(botId, {
+          botId,
+          balance: {},
+          usdValue: 0,
+          loading: false,
+          error: message
+        }));
+      }
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId); // Ensure timeout is always cleared
+      }
     }
   }, []);
 

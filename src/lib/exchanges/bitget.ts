@@ -8,6 +8,7 @@ export const bitgetPlugin: ExchangePlugin = {
   createClient: async (credentials?: ResolvedExchangeCredentials) => {
     const options: Record<string, unknown> = {
       enableRateLimit: true,
+      timeout: 15000, // 15 second timeout to prevent hanging requests
     }
 
     if (credentials?.apiKey) {
