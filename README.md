@@ -41,3 +41,46 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 See `docs/` for project docs:
 - `docs/API.md`
 - `docs/RULES.md`
+
+## Billing & Subscriptions
+
+The app now supports Stripe-based subscriptions:
+
+- Free plan: up to 5 bots per user
+- Pro plan ($5/mo): up to 25 bots per user
+- Admin users (configured via email) have unlimited bots
+
+### Environment variables
+
+Add the following variables to your environment (e.g. `.env.local`):
+
+```
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PRICE_ID=price_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+# Optional: comma-separated list of admin emails with unlimited bots
+ADMIN_EMAILS=you@example.com,partner@example.com
+```
+
+### Database migration
+
+Run the new Supabase migration to create the `user_subscriptions` table:
+
+```
+npm run migrate:custom
+```
+
+### Stripe webhook
+
+Configure a Stripe webhook pointing to:
+
+```
+POST https://your-domain.com/api/stripe/webhook
+```
+
+Listen for the following events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`.
+
+### Managing subscriptions
+
+Authenticated users can manage their plan from the **Billing** tab inside `/profile` (or directly via `/billing`). The create-bot flow enforces plan limits, and admins (by email) bypass all limits.

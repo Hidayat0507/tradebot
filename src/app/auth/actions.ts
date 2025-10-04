@@ -6,6 +6,23 @@ type AuthResponse =
   | { error: string; success?: never; message?: never }
   | { success: true; error?: never; message?: string }
 
+export async function signInWithGoogle(): Promise<AuthResponse> {
+  const supabase = createClient()
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true }
+}
+
 export async function login(formData: FormData): Promise<AuthResponse> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -31,9 +48,10 @@ export async function login(formData: FormData): Promise<AuthResponse> {
 export async function signup(formData: FormData): Promise<AuthResponse> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
+  const username = formData.get('username') as string
 
-  if (!email || !password) {
-    return { error: 'Please provide both email and password' }
+  if (!email || !password || !username) {
+    return { error: 'Please provide all required fields' }
   }
 
   const supabase = createClient()
@@ -43,6 +61,10 @@ export async function signup(formData: FormData): Promise<AuthResponse> {
     password,
     options: {
       emailRedirectTo: `${window.location.origin}/auth/confirm`,
+      data: {
+        username: username,
+        display_name: username,
+      },
     },
   })
 

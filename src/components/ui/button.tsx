@@ -12,6 +12,7 @@ const buttonVariants = cva(
         default: "bg-white text-gray-900 border border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 shadow-sm",
         primary: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:opacity-90 dark:from-blue-500 dark:to-indigo-500",
         secondary: "bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-md hover:opacity-90",
+        outline: "border border-gray-300 text-gray-900 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800",
         gradient: "bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 text-white shadow-md hover:opacity-90 dark:from-purple-500 dark:via-blue-500 dark:to-indigo-500",
         destructive: "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md hover:opacity-90",
         ghost: "text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800",
@@ -42,11 +43,11 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, fullWidth, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, fullWidth: false, className }))}
+        className={cn(buttonVariants({ variant, size, fullWidth }), className)}
         ref={ref}
         {...props}
       />

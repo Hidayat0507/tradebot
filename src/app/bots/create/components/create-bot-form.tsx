@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { generateBotId } from '@/lib/crypto'
 import { Button } from '@/components/ui/button'
@@ -65,6 +65,10 @@ export function CreateBotForm() {
   const [validationSuccess, setValidationSuccess] = useState<string | null>(null)
   const [showApiSecret, setShowApiSecret] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [botLimit, setBotLimit] = useState<number | null>(null)
+  const [currentBotCount, setCurrentBotCount] = useState(0)
+  const [plan, setPlan] = useState<string>('free')
+  const [limitWarning, setLimitWarning] = useState<string | null>(null)
   const supabase = createClient()
   const form = useForm<CreateBotFormValues>({
     resolver: zodResolver(createBotFormSchema),
@@ -78,6 +82,44 @@ export function CreateBotForm() {
       password: '',
     },
   })
+
+  useEffect(() => {
+    async function loadUsage() {
+      try {
+        setLimitWarning(null)
+
+        const subscriptionResponse = await fetch('/api/subscription', { cache: 'no-store' })
+        const subscriptionPayload = await subscriptionResponse.json()
+
+        if (subscriptionResponse.ok && subscriptionPayload?.success && subscriptionPayload?.data) {
+          const { limit, plan: planName } = subscriptionPayload.data as {
+            limit: number | null
+            plan: string
+          }
+          setBotLimit(limit)
+          setPlan(planName)
+        } else if (subscriptionPayload?.error) {
+          setLimitWarning(subscriptionPayload.error)
+        }
+
+        const { count, error: countError } = await supabase
+          .from('bots')
+          .select('id', { count: 'exact', head: true })
+
+        if (countError) {
+          throw countError
+        }
+
+        setCurrentBotCount(count ?? 0)
+      } catch (err) {
+        console.error('Failed to load bot usage limits', err)
+        const message = err instanceof Error ? err.message : 'Unable to load bot usage limits'
+        setLimitWarning(message)
+      }
+    }
+
+    loadUsage()
+  }, [supabase])
 
   async function onSubmit(values: CreateBotFormValues) {
     try {
@@ -100,6 +142,12 @@ export function CreateBotForm() {
       if (!userId) {
         alert('User is not logged in. Redirecting to login.')
         router.push('/auth/login')
+        return
+      }
+
+      if (botLimit !== null && currentBotCount >= botLimit) {
+        setError(`You have reached the ${botLimit} bot limit for the ${plan} plan.`)
+        setIsSubmitting(false)
         return
       }
 
@@ -203,6 +251,33 @@ export function CreateBotForm() {
           <AlertDescription>{success}</AlertDescription>
         </Alert>
       )}
+
+      {limitWarning && (
+        <Alert className="border-amber-400 text-amber-600 dark:border-amber-500/60 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Usage information unavailable</AlertTitle>
+          <AlertDescription>{limitWarning}</AlertDescription>
+        </Alert>
+      )}
+
+      {plan === 'admin' ? (
+        <Alert className="border-blue-300 text-blue-700 dark:border-blue-500/40 dark:text-blue-300">
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertTitle>Unlimited access</AlertTitle>
+          <AlertDescription>
+            You can create unlimited bots with your admin access.
+          </AlertDescription>
+        </Alert>
+      ) : botLimit !== null ? (
+        <Alert className="border-gray-200 text-gray-700 dark:border-gray-700 dark:text-gray-200">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Plan usage</AlertTitle>
+          <AlertDescription>
+            You are using {currentBotCount} of {botLimit} bots on the {plan} plan.
+            {currentBotCount >= botLimit ? ' Upgrade your plan to add more bots.' : ''}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {validationError && (
         <Alert variant="destructive" className="mb-4">
@@ -440,7 +515,13 @@ export function CreateBotForm() {
             )}
           </div>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            disabled={
+              isSubmitting ||
+              (botLimit !== null && currentBotCount >= botLimit)
+            }
+          >
             {isSubmitting ? 'Creating Bot...' : 'Create Bot'}
           </Button>
         </form>

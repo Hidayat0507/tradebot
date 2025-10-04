@@ -16,6 +16,7 @@ const supabase = createClient(supabaseUrl, serviceKey, {
 });
 
 const migrations = [
+  '20250216120000_add_user_subscriptions_table.sql',
   '20250228_add_bitget_password.sql',
   '20250228_add_pair_normalization_and_trade_index.sql',
   '20250301_update_exchange_check.sql',
@@ -71,7 +72,6 @@ async function apply() {
 }
 
 apply();
-
 
 
 

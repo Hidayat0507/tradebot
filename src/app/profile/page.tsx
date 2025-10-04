@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/form"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { BillingOverview } from '@/components/billing/billing-overview'
 
 const profileFormSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters'),
@@ -149,9 +150,10 @@ export default function ProfilePage() {
         )}
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+          <TabsList className="grid w-full grid-cols-3 max-w-[600px]">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="password">Password</TabsTrigger>
+            <TabsTrigger value="billing">Billing</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
@@ -261,6 +263,10 @@ export default function ProfilePage() {
                 </Form>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="billing">
+            <BillingOverview showHeader={false} className="pt-2" />
           </TabsContent>
         </Tabs>
       </div>

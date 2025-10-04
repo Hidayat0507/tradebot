@@ -11,6 +11,7 @@ import {
   ApiError
 } from '@/app/api/_middleware/api-handler';
 import { logger, normalizeError } from '@/lib/logging';
+import { resolveBotLimit } from '@/lib/subscriptions';
 
 type BotInsert = Database['public']['Tables']['bots']['Insert']
 
@@ -40,6 +41,33 @@ export async function POST(request: NextRequest) {
   try {
     const { user, supabase } = await getAuthenticatedUser(request);
     const payload = await request.json()
+
+    try {
+      const { limit } = await resolveBotLimit(supabase, user)
+
+      if (limit !== null) {
+        const { count, error: countError } = await supabase
+          .from('bots')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+
+        if (countError) {
+          throw countError
+        }
+
+        if (typeof count === 'number' && count >= limit) {
+          throw new ApiError(`Bot limit reached for your current plan (max ${limit})`, 403)
+        }
+      }
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error
+      }
+
+      const err = normalizeError(error)
+      logger.error('Failed to evaluate bot limit before creation', err, { userId: user.id })
+      throw new ApiError('Unable to verify bot limit', 500)
+    }
 
     validateBotData(payload);
 

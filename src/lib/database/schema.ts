@@ -137,6 +137,47 @@ export interface Database {
           updated_at?: string
         }
       }
+      user_subscriptions: {
+        Row: {
+          user_id: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          plan: string
+          status: string
+          max_bots: number | null
+          current_period_end: string | null
+          cancel_at_period_end: boolean
+          metadata: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          plan?: string
+          status?: string
+          max_bots?: number | null
+          current_period_end?: string | null
+          cancel_at_period_end?: boolean
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          plan?: string
+          status?: string
+          max_bots?: number | null
+          current_period_end?: string | null
+          cancel_at_period_end?: boolean
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

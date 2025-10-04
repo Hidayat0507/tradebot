@@ -11,6 +11,7 @@ import {
   resolveExchangeCredentials,
   ExchangeCredentials
 } from '@/app/api/_middleware/exchange-middleware';
+import { getExchangePlugin } from '@/lib/exchanges/registry'
 import { decrypt } from '@/utils/encryption';
 import { logger, normalizeError } from '@/lib/logging';
 
@@ -62,19 +63,24 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate that we have the required credentials
-    if (!bot.api_key || !bot.api_secret) {
-      logger.error(
-        'Missing API credentials for balance fetch',
-        new Error('Missing API credentials'),
-        { botId, userId: user.id }
-      )
-      throw new ApiError('Please add API credentials to your bot to fetch balance', 400);
+    const plugin = getExchangePlugin(bot.exchange)
+
+    if (!bot.api_key) {
+      throw new ApiError('Please add an API key to your bot to fetch balance', 400)
+    }
+
+    if (plugin.requiredCredentials.includes('apiSecret') && !bot.api_secret) {
+      throw new ApiError('Please add an API secret to your bot to fetch balance', 400)
+    }
+
+    if (plugin.requiredCredentials.includes('password') && !bot.password) {
+      throw new ApiError('Your exchange requires an API passphrase to fetch balance', 400)
     }
 
     // Create exchange client with credentials
     const credentials: ExchangeCredentials = {
       apiKey: bot.api_key,
-      apiSecret: bot.api_secret,
+      apiSecret: bot.api_secret || undefined,
       password: bot.password || undefined
     };
 

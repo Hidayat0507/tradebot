@@ -28,7 +28,10 @@ export default function ProfileMenu({ user }: { user: User | null }) {
 
   if (!user) return null
 
-  const initial = user.email?.[0].toUpperCase() || 'U'
+  const username = (user.user_metadata?.username as string | undefined)?.trim()
+  const fallbackName = user.email?.split('@')[0]
+  const displayName = username || fallbackName || 'User'
+  const initial = displayName[0]?.toUpperCase() || 'U'
 
   return (
     <DropdownMenu>
@@ -41,7 +44,7 @@ export default function ProfileMenu({ user }: { user: User | null }) {
             {initial}
           </span>
           <span className="hidden md:inline-flex text-sm font-medium text-gray-700 dark:text-gray-200">
-            {user.email?.split('@')[0]}
+            {displayName}
           </span>
         </Button>
       </DropdownMenuTrigger>
