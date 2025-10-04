@@ -10,11 +10,32 @@ interface BotForChart {
 }
 
 interface AssetBalance {
-  [asset: string]: number;
+  amount: number;
+  usdValue: number;
 }
 
 interface ExchangeBalances {
-  [exchange: string]: AssetBalance;
+  [exchange: string]: {
+    [asset: string]: AssetBalance;
+  };
+}
+
+// Crypto price mapping (same as in page.tsx)
+const CRYPTO_PRICES: Record<string, number> = {
+  'BTC': 50000,
+  'ETH': 3000,
+  'BNB': 300,
+  'SOL': 100,
+  'XRP': 0.5,
+  'ADA': 0.3,
+  'USDT': 1,
+  'USDC': 1,
+  'BUSD': 1,
+  'DAI': 1,
+};
+
+function getCryptoPrice(symbol: string): number {
+  return CRYPTO_PRICES[symbol.toUpperCase()] || 0;
 }
 
 export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
@@ -37,7 +58,7 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
         // For each exchange, fetch and aggregate balances using the server API per bot
         const balances: ExchangeBalances = {};
         for (const [exchange, botsInExchange] of Object.entries(grouped)) {
-          const assetTotals: AssetBalance = {};
+          const assetTotals: { [asset: string]: AssetBalance } = {};
           await Promise.all(
             botsInExchange.map(async (bot) => {
               try {
@@ -51,9 +72,19 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
                   total?: Record<string, number>
                 } | undefined;
                 if (!balanceData || !balanceData.total) return;
+                
                 for (const [asset, amount] of Object.entries(balanceData.total)) {
                   if (!amount || typeof amount !== 'number' || amount <= 0) continue;
-                  assetTotals[asset] = (assetTotals[asset] || 0) + amount;
+                  
+                  // Calculate USD value
+                  const price = getCryptoPrice(asset);
+                  const usdValue = amount * price;
+                  
+                  if (!assetTotals[asset]) {
+                    assetTotals[asset] = { amount: 0, usdValue: 0 };
+                  }
+                  assetTotals[asset].amount += amount;
+                  assetTotals[asset].usdValue += usdValue;
                 }
               } catch {
                 // ignore this bot on error
@@ -73,35 +104,75 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
     fetchAllBalances();
   }, [bots]);
 
-  if (loading) return <div>Loading exchange balances...</div>;
-  if (error) return <div className="text-red-500">{error}</div>;
+  if (loading) return <div className="flex items-center justify-center py-8 text-gray-500">Loading exchange balances...</div>;
+  if (error) return <div className="text-red-500 text-center py-8">{error}</div>;
 
   return (
-    <div className="mb-8 flex flex-wrap gap-8">
+    <div className="flex flex-wrap gap-8 justify-center">
       {Object.entries(exchangeBalances).map(([exchange, assetBalances]) => {
-        const total = Object.values(assetBalances).reduce((a, b) => a + b, 0);
-        const labels = Object.keys(assetBalances);
-        const dataValues = Object.values(assetBalances);
+        // Calculate total USD value
+        const totalUsdValue = Object.values(assetBalances).reduce((sum, asset) => sum + asset.usdValue, 0);
+        
+        // Sort assets by USD value (descending)
+        const sortedAssets = Object.entries(assetBalances).sort((a, b) => b[1].usdValue - a[1].usdValue);
+        
+        const labels = sortedAssets.map(([asset, data]) => {
+          const percent = totalUsdValue > 0 ? ((data.usdValue / totalUsdValue) * 100).toFixed(2) : '0.00';
+          const usdFormatted = data.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return `${asset}: $${usdFormatted} (${percent}%)`;
+        });
+        
+        const dataValues = sortedAssets.map(([, data]) => data.usdValue);
+        
         const data = {
-          labels: labels.map((asset) => {
-            const amount = assetBalances[asset];
-            const percent = total > 0 ? ((amount / total) * 100).toFixed(2) : '0.00';
-            return `${asset}: ${amount} (${percent}%)`;
-          }),
+          labels,
           datasets: [
             {
               data: dataValues,
               backgroundColor: [
-                '#60a5fa', '#fbbf24', '#34d399', '#f87171', '#a78bfa', '#f472b6', '#38bdf8', '#facc15', '#4ade80', '#fb7185',
+                '#60a5fa', '#fbbf24', '#34d399', '#f87171', '#a78bfa', 
+                '#f472b6', '#38bdf8', '#facc15', '#4ade80', '#fb7185',
               ],
+              borderWidth: 2,
+              borderColor: '#ffffff',
             },
           ],
         };
+        
         return (
           <div key={exchange} className="flex flex-col items-center">
-            <h3 className="font-semibold mb-2">{exchange} (Total: {total})</h3>
-            <div style={{ width: 260, height: 260 }}>
-              <Pie data={data} />
+            <h3 className="font-semibold mb-2 text-lg">
+              {exchange.charAt(0).toUpperCase() + exchange.slice(1)}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Total: ${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <div style={{ width: 280, height: 280 }}>
+              <Pie 
+                data={data}
+                options={{
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        boxWidth: 12,
+                        padding: 10,
+                        font: {
+                          size: 11
+                        }
+                      }
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          const label = context.label || '';
+                          return label;
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
             </div>
           </div>
         );
