@@ -12,7 +12,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table'
-import { TrendingUp, TrendingDown, RefreshCcw } from 'lucide-react'
+import { TrendingUp, TrendingDown, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Trade {
@@ -37,13 +37,29 @@ interface ActivePositionsProps {
   trades: Trade[]
 }
 
+const POSITIONS_PER_PAGE = 5
+
 export default function ActivePositions({ trades }: ActivePositionsProps) {
   const [positions, setPositions] = useState<PositionWithUnrealized[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Filter only buy orders (open positions) that haven't been closed
   const openPositions = trades.filter(t => t.side.toLowerCase() === 'buy' && t.price !== null)
+
+  // Calculate pagination
+  const totalPages = Math.ceil(positions.length / POSITIONS_PER_PAGE)
+  const startIndex = (currentPage - 1) * POSITIONS_PER_PAGE
+  const endIndex = startIndex + POSITIONS_PER_PAGE
+  const paginatedPositions = positions.slice(startIndex, endIndex)
+
+  // Reset to page 1 if current page exceeds total pages
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [currentPage, totalPages])
 
   const fetchMarketPrices = useCallback(async () => {
     if (openPositions.length === 0) {
@@ -230,7 +246,8 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
               Active Positions
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-300">
-              {positions.length} open position{positions.length !== 1 ? 's' : ''} • Total Unrealized P&L: 
+              {positions.length} open position{positions.length !== 1 ? 's' : ''} 
+              {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`} • Total Unrealized P&L: 
               <span className={`ml-1 font-semibold ${totalUnrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 ${totalUnrealizedPnL.toFixed(2)}
               </span>
@@ -262,7 +279,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {positions.map((position) => (
+              {paginatedPositions.map((position) => (
                 <TableRow key={position.id}>
                   <TableCell className="font-medium">{position.botName || 'Unknown Bot'}</TableCell>
                   <TableCell>
@@ -316,6 +333,48 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-2 py-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {startIndex + 1} to {Math.min(endIndex, positions.length)} of {positions.length} positions
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="min-w-[40px]"
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
