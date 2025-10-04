@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { createClient } from '@/utils/supabase/client';
 import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -85,9 +85,9 @@ export default function AssetsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterExchange, setFilterExchange] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  const fetchBots = async () => {
+  const fetchBots = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -102,9 +102,9 @@ export default function AssetsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
-  const fetchBotBalance = async (botId: string) => {
+  const fetchBotBalance = useCallback(async (botId: string) => {
     try {
       setBalances(prev => new Map(prev).set(botId, {
         botId,
@@ -175,26 +175,26 @@ export default function AssetsPage() {
         error: message
       }));
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchBots();
-  }, []);
+  }, [fetchBots]);
 
   useEffect(() => {
     if (bots.length > 0) {
       bots.forEach(bot => fetchBotBalance(bot.id));
     }
-  }, [bots]);
+  }, [bots, fetchBotBalance]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchBots();
     if (bots.length > 0) {
       await Promise.all(bots.map(bot => fetchBotBalance(bot.id)));
     }
     setRefreshing(false);
-  };
+  }, [fetchBots, fetchBotBalance, bots]);
 
   // Filter and search
   const filteredBots = useMemo(() => {
