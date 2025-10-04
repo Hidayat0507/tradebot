@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser, ApiError } from '@/app/api/_middleware/api-handler'
 import { isAdminUser } from '@/lib/subscriptions'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +11,9 @@ export async function GET(request: NextRequest) {
     if (!isAdminUser(user)) {
       throw new ApiError('Forbidden - Admin access required', 403)
     }
+
+    // Create admin client for privileged operations
+    const adminClient = createAdminClient()
 
     // Fetch all users with their bot counts
     const { data: users, error: usersError } = await supabase
@@ -26,8 +30,8 @@ export async function GET(request: NextRequest) {
       botCounts[bot.user_id] = (botCounts[bot.user_id] || 0) + 1
     })
 
-    // Get all users from auth
-    const { data: authUsers, error: authUsersError } = await supabase.auth.admin.listUsers()
+    // Get all users from auth using admin client
+    const { data: authUsers, error: authUsersError } = await adminClient.auth.admin.listUsers()
     
     if (authUsersError) {
       throw authUsersError
