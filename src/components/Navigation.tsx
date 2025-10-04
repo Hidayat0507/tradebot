@@ -8,6 +8,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
 import ProfileMenu from './profile-menu'
+import { isAdminUser } from '@/lib/subscriptions'
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
   const pathname = usePathname()
@@ -72,6 +73,9 @@ export default function Navigation() {
             <NavLink href="/dashboard">Dashboard</NavLink>
             <NavLink href="/bots">Bots</NavLink>
             <NavLink href="/assets">Assets</NavLink>
+            {user && isAdminUser(user) && (
+              <NavLink href="/admin">Admin</NavLink>
+            )}
           </div>
         </div>
 
