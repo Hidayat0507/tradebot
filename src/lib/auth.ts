@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function getSession() {
@@ -13,14 +13,12 @@ export async function getSession() {
           const cookie = await cookieStore.get(name)
           return cookie?.value
         },
-        async set(name: string, value: string, options: CookieOptions) {
-          await cookieStore.set(name, value, options)
+        // READ-ONLY: set and remove are no-ops to prevent Next.js cookie modification errors in Server Components
+        async set() {
+          // Cannot modify cookies in Server Components - no-op
         },
-        async remove(name: string, options: CookieOptions) {
-          await cookieStore.delete({
-            name,
-            ...options
-          })
+        async remove() {
+          // Cannot modify cookies in Server Components - no-op
         },
       },
     }
