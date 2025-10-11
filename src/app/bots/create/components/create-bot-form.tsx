@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { generateBotId } from '@/lib/crypto'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -13,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 import { z } from 'zod'
-import { randomBytes } from 'crypto'
 
 const SUPPORTED_EXCHANGES = [
   { id: 'bitget', name: 'Bitget' },
@@ -37,6 +35,52 @@ const TRADING_PAIRS = [
   'UNI/USDT',
   'AAVE/USDT',
 ] as const
+
+const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'))
+
+function getWebCrypto(): Crypto {
+  const crypto = typeof globalThis !== 'undefined'
+    ? (globalThis.crypto || (globalThis as unknown as { msCrypto?: Crypto }).msCrypto)
+    : undefined
+
+  if (!crypto || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('Secure random number generation is not supported in this environment')
+  }
+
+  return crypto
+}
+
+function bytesToHex(bytes: Uint8Array, uppercase = false) {
+  const hex = Array.from(bytes, (byte) => BYTE_TO_HEX[byte]).join('')
+  return uppercase ? hex.toUpperCase() : hex
+}
+
+function generateClientBotId() {
+  const crypto = getWebCrypto()
+  const bytes = new Uint8Array(4)
+  crypto.getRandomValues(bytes)
+  return bytesToHex(bytes, true)
+}
+
+async function generateWebhookSecret() {
+  const crypto = getWebCrypto()
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  const plain = bytesToHex(bytes)
+
+  if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
+    throw new Error('Secure hashing is not supported in this environment')
+  }
+
+  const encoded = new TextEncoder().encode(plain)
+  const digest = await crypto.subtle.digest('SHA-256', encoded)
+  const hashHex = bytesToHex(new Uint8Array(digest))
+
+  return {
+    plain,
+    hashed: `sha256:${hashHex}`,
+  }
+}
 
 const createBotFormSchema = z.object({
   name: z.string().min(3, 'Bot name must be at least 3 characters'),
@@ -69,6 +113,8 @@ export function CreateBotForm() {
   const [currentBotCount, setCurrentBotCount] = useState(0)
   const [plan, setPlan] = useState<string>('free')
   const [limitWarning, setLimitWarning] = useState<string | null>(null)
+  const [generatedWebhookSecret, setGeneratedWebhookSecret] = useState<string | null>(null)
+  const [secretCopyStatus, setSecretCopyStatus] = useState<string | null>(null)
   const supabase = createClient()
   const form = useForm<CreateBotFormValues>({
     resolver: zodResolver(createBotFormSchema),
@@ -128,6 +174,8 @@ export function CreateBotForm() {
       setSuccess(null)
       setValidationError(null)
       setValidationSuccess(null)
+      setGeneratedWebhookSecret(null)
+      setSecretCopyStatus(null)
 
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError) throw new Error('Authentication failed: Please log in again')
@@ -152,10 +200,10 @@ export function CreateBotForm() {
       }
 
       // Generate a unique ID for the bot
-      const botId = generateBotId()
+      const botId = generateClientBotId()
 
       // Generate a webhook secret
-      const webhookSecret = randomBytes(32).toString('hex')
+      const { plain: webhookSecretPlaintext, hashed: webhookSecretHash } = await generateWebhookSecret()
 
       // Step 1: Create the bot first with placeholder values
       const { error: botError } = await supabase
@@ -172,7 +220,7 @@ export function CreateBotForm() {
           // Add placeholder values that will be replaced after validation
           api_key: 'pending_validation',
           api_secret: 'pending_validation',
-          webhook_secret: webhookSecret, // Auto-generate webhook secret
+          webhook_secret: webhookSecretHash, // Store hashed secret immediately
         })
         .select()
         .single()
@@ -215,8 +263,9 @@ export function CreateBotForm() {
 
         setValidationSuccess('Exchange credentials validated successfully!')
         setValidationError(null)
-        setSuccess('Bot created successfully!')
-        router.push('/bots')
+        setSuccess('Bot created successfully! Copy your webhook secret below before leaving this page.')
+        setGeneratedWebhookSecret(webhookSecretPlaintext)
+        setSecretCopyStatus(null)
       } catch (error: any) {
         // If something goes wrong, delete the bot we just created
         await supabase.from('bots').delete().eq('id', botId)
@@ -526,6 +575,51 @@ export function CreateBotForm() {
           </Button>
         </form>
       </Form>
+
+      {generatedWebhookSecret && (
+        <Alert className="mt-6 border-blue-200 text-blue-700 dark:border-blue-500/60 dark:text-blue-200">
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertTitle>Webhook Secret Generated</AlertTitle>
+          <AlertDescription>
+            <div className="space-y-3">
+              <p>Your webhook secret is shown below and will only be displayed once. Copy it before navigating away.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="rounded bg-muted px-2 py-1 text-sm">{generatedWebhookSecret}</code>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(generatedWebhookSecret)
+                        setSecretCopyStatus('Webhook secret copied to clipboard.')
+                      } else {
+                        throw new Error('Clipboard API unavailable')
+                      }
+                    } catch {
+                      window.prompt('Copy your webhook secret:', generatedWebhookSecret)
+                      setSecretCopyStatus('Copy the secret manually if it did not copy automatically.')
+                    }
+                  }}
+                >
+                  Copy Secret
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => router.push('/bots')}
+                >
+                  Go to Bots
+                </Button>
+              </div>
+              {secretCopyStatus && (
+                <p className="text-sm text-blue-600 dark:text-blue-300">{secretCopyStatus}</p>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }
