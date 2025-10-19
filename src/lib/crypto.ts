@@ -1,27 +1,41 @@
-import { randomBytes } from 'crypto';
-
 // Constants
 const SECURE_SECRET_BYTES = 32;
 const BOT_ID_BYTES = 4;
+
+const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+
+function getWebCrypto(): Crypto {
+  if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+    return window.crypto;
+  }
+
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    return globalThis.crypto as Crypto;
+  }
+
+  throw new Error('Secure random generation is not supported in this environment');
+}
+
+function bytesToHex(bytes: Uint8Array, uppercase = false): string {
+  const hex = Array.from(bytes, (byte) => BYTE_TO_HEX[byte]).join('');
+  return uppercase ? hex.toUpperCase() : hex;
+}
 
 /**
  * Generates a random hex string of specified length
  */
 function generateRandomHex(bytes: number): string {
-  return randomBytes(bytes).toString('hex');
+  const crypto = getWebCrypto();
+  const buffer = new Uint8Array(bytes);
+  crypto.getRandomValues(buffer);
+  return bytesToHex(buffer);
 }
 
 /**
  * Generates a random hex string asynchronously
  */
 async function generateRandomHexAsync(bytes: number): Promise<string> {
-  const buffer = await new Promise<Buffer>((resolve, reject) => {
-    randomBytes(bytes, (err, buf) => {
-      if (err) reject(err);
-      else resolve(buf);
-    });
-  });
-  return buffer.toString('hex');
+  return generateRandomHex(bytes);
 }
 
 // Function to generate a secure key for encryption
