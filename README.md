@@ -39,8 +39,8 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 ## Documentation
 
 See `docs/` for project docs:
-- `docs/API.md`
-- `docs/RULES.md`
+- `docs/API.md` - Webhook API and TradingView integration
+- `docs/ADMIN_PANEL_GUIDE.md` - Admin panel features and user management
 
 ## Billing & Subscriptions
 
