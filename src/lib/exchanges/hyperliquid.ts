@@ -25,5 +25,8 @@ export const hyperliquidPlugin: ExchangePlugin = {
     return new ccxt.hyperliquid(options)
   },
   formatSymbol: (_exchange, symbol) => symbol,
-  getBalanceParams: (credentials) => ({ user: credentials.apiKey }),
+  getBalanceParams: (credentials) => ({ 
+    type: 'spot', // Explicitly request spot balances (not perp/futures)
+    user: credentials.apiKey 
+  }),
 }
