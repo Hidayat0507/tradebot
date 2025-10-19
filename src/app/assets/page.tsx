@@ -471,12 +471,20 @@ export default function AssetsPage() {
                                 {Object.entries(botBalance?.balance || {})
                                   .filter(([, data]) => data.total > 0)
                                   .slice(0, 3)
-                                  .map(([currency, data]) => (
-                                    <div key={currency} className="text-sm">
-                                      <span className="font-medium">{currency}:</span>{' '}
-                                      {data.total.toFixed(4)}
-                                    </div>
-                                  ))}
+                                  .map(([currency, data]) => {
+                                    // Format stablecoins with 2 decimals, other crypto with 4
+                                    const isStablecoin = ['USDT', 'USDC', 'BUSD', 'DAI', 'USDD', 'TUSD', 'USDP'].includes(currency.toUpperCase());
+                                    const formattedAmount = isStablecoin 
+                                      ? data.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                      : data.total.toFixed(4);
+                                    
+                                    return (
+                                      <div key={currency} className="text-sm">
+                                        <span className="font-medium">{currency}:</span>{' '}
+                                        {formattedAmount}
+                                      </div>
+                                    );
+                                  })}
                                 {Object.keys(botBalance?.balance || {}).length > 3 && (
                                   <div className="text-xs text-gray-500">
                                     +{Object.keys(botBalance?.balance || {}).length - 3} more
