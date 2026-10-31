@@ -1,3 +1,4 @@
+// PLACEHOLDER: sample quotes, not real customers. Not rendered on the landing page until real testimonials exist.
 const testimonials = [
   {
     quote:

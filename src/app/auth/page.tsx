@@ -141,12 +141,12 @@ export default function AuthPage() {
                   {
                     icon: '⚡',
                     title: 'Lightning Fast Execution',
-                    description: 'Execute trades in milliseconds with our optimized infrastructure'
+                    description: 'Webhook alerts are validated and routed to your exchange automatically'
                   },
                   {
                     icon: '🔒',
-                    title: 'Bank-Level Security',
-                    description: 'Your API keys are encrypted and never leave our secure servers'
+                    title: 'Encrypted API Keys',
+                    description: 'Exchange API keys are encrypted at rest and only used server-side'
                   },
                   {
                     icon: '📊',
@@ -174,12 +174,10 @@ export default function AuthPage() {
           </div>
 
           <div className="relative z-10 space-y-4">
-            <div className="flex items-center gap-8 text-sm text-white/60">
-              <span>2,500+ Active Bots</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/60">
+              <span>Paper mode by default</span>
               <span>•</span>
-              <span>$10M+ Trading Volume</span>
-              <span>•</span>
-              <span>99.9% Uptime</span>
+              <span>Encrypted API keys</span>
             </div>
           </div>
         </div>
