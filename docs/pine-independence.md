@@ -93,3 +93,19 @@ explicit per-bot opt-in plus the existing order caps — out of scope for this P
   order path with the bot forced to `mode: 'paper'` (`paperOrderPath` refuses anything else),
   7. advance cursor. Errors are isolated per bot. No cron route / DB loader wired yet.
 - Not yet live in scheduler: `strategy.exit` stop/limit (needs intrabar monitoring).
+
+## Phase 3 (feat/pine-phase3)
+- Scheduler now monitors `strategy.exit` stop/limit on closed candles (stop first, gaps fill at open);
+  a hit on bar *i* is sent as a paper order on the tick after bar *i* closes, priced at the level.
+- `GET|POST /api/cron/paper-strategies` — requires `Authorization: Bearer $CRON_SECRET`
+  (≥16 chars, constant-time compare). Unset secret → 503, wrong token → 401, before any DB access.
+  Example Vercel cron (not added): `{ "crons": [{ "path": "/api/cron/paper-strategies", "schedule": "*/5 * * * *" }] }`
+  (Vercel sends the CRON_SECRET bearer automatically).
+- `createSupabaseSchedulerDeps(serviceClient)` — loads enabled paper strategies joined to enabled bots,
+  never selects credentials, re-validates the stored definition, public-exchange allowlist,
+  `signals` claim for idempotency, cursor update.
+- `PUT|GET|DELETE /api/bots/[id]/strategy` — owner-checked, user-scoped client (RLS), Pine converted
+  server-side (client definitions ignored), `enabled` defaults to false on every save.
+- Migration fix: column-level grants (a table-level UPDATE grant would override a column revoke),
+  so `mode`, `last_candle_time`, `user_id`, `bot_id` are not user-updatable.
+- UI `/strategy`: "Save to bot" panel (bot, timeframe, paper size, enable checkbox unticked by default).

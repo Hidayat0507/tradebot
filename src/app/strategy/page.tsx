@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { SAMPLE_PINE } from '@/lib/strategy/samples'
 import { PUBLIC_EXCHANGES, TIMEFRAMES } from '@/lib/strategy/exchanges'
@@ -23,6 +24,36 @@ export default function StrategyPage() {
   const [exchange, setExchange] = useState<string>('binance')
   const [symbol, setSymbol] = useState('BTC/USDT')
   const [timeframe, setTimeframe] = useState<string>('1h')
+  const [bots, setBots] = useState<{ id: string; name: string; pair: string }[]>([])
+  const [botId, setBotId] = useState('')
+  const [quoteSize, setQuoteSize] = useState(100)
+  const [enabled, setEnabled] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    createClient().from('bots').select('id, name, pair').order('created_at', { ascending: false })
+      .then(({ data }) => { if (data) { setBots(data); if (data[0]) setBotId(data[0].id) } })
+  }, [])
+
+  async function save() {
+    if (!botId) return
+    setSaving(true); setSaveMsg(null)
+    try {
+      const res = await fetch(`/api/bots/${encodeURIComponent(botId)}/strategy`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pine, timeframe, paperQuoteSize: quoteSize, enabled }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setSaveMsg(res.ok
+        ? { ok: true, text: `Saved (${enabled ? 'enabled' : 'disabled'}, paper, ${timeframe}).` }
+        : { ok: false, text: data.error ?? `HTTP ${res.status}` })
+    } catch (e) {
+      setSaveMsg({ ok: false, text: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function run() {
     setLoading(true)
@@ -89,6 +120,35 @@ export default function StrategyPage() {
         )}
         <Button onClick={run} disabled={loading}>{loading ? 'Running…' : 'Convert & backtest'}</Button>
       </div>
+
+      <section className="space-y-3 rounded border p-4 text-sm">
+        <h2 className="font-semibold">Save to bot (paper)</h2>
+        {bots.length === 0 ? <p className="text-muted-foreground">No bots yet.</p> : (
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">Bot
+              <select className="rounded border p-2" value={botId} onChange={(e) => setBotId(e.target.value)}>
+                {bots.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.pair})</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">Timeframe
+              <select className="rounded border p-2" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+                {TIMEFRAMES.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">Paper order size (quote)
+              <input type="number" min={1} max={1000000} className="w-32 rounded border p-2" value={quoteSize}
+                onChange={(e) => setQuoteSize(Number(e.target.value))} />
+            </label>
+            <label className="flex items-center gap-2 pb-2">
+              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              Enable paper scheduler
+            </label>
+            <Button onClick={save} disabled={saving || !botId}>{saving ? 'Saving…' : 'Save strategy'}</Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">Saved strategies run in paper mode only. Disabled unless you tick the box.</p>
+        {saveMsg && <p className={saveMsg.ok ? 'text-green-700' : 'text-red-700'}>{saveMsg.text}</p>}
+      </section>
 
       {result && !result.ok && <pre className="whitespace-pre-wrap rounded bg-red-50 p-3 text-sm text-red-800">{result.error}</pre>}
       {result && result.ok && (
