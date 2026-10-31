@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { WebhookSecretSection } from '@/components/bot/WebhookSecretSection';
 
 type Bot = {
+  mode: 'live' | 'paper'
   id: string
   user_id: string
   name: string
@@ -168,6 +169,8 @@ export default function BotDetailsPage() {
                   <div className="space-y-4">
                     <pre className="text-xs bg-white dark:bg-gray-900 p-3 rounded-md overflow-x-auto text-gray-900 dark:text-gray-100">
 {`{
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "${bot.id}",
   "symbol": "${bot.pair}",
   "action": "{{strategy.order.action}}",
