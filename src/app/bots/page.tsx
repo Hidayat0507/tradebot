@@ -8,7 +8,7 @@ import { ModeBadge } from '@/components/bot/ModeBadge'
 import { formatOrderSizePct, modeOf, ORDER_SIZE } from '@/lib/bot-config'
 
 type Bot = {
-  mode?: 'live' | 'paper'
+  mode?: 'live' | 'paper' | 'testnet'
   id: string
   user_id: string
   name: string

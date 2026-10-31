@@ -11,7 +11,7 @@ import { formatOrderSizePct, modeOf, ORDER_SIZE } from '@/lib/bot-config'
 import { secretDisplay, secretForExample } from '@/lib/webhook-secret-display'
 
 type Bot = {
-  mode: 'live' | 'paper'
+  mode: 'live' | 'paper' | 'testnet'
   id: string
   user_id: string
   name: string

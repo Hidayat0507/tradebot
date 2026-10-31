@@ -7,7 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database/schema';
 import type { TickerResult } from '@/types/exchange';
 import { BotData } from './execute-trade';
-import { executeTrade, isPaperMode } from './execute-trade';
+import { executeTrade, isPaperMode, isTestnetMode } from './execute-trade';
+import { enableTestnet } from '@/lib/exchanges/testnet';
 import { saveTrade } from './save-trade';
 
 /**
@@ -32,6 +33,8 @@ export async function processWebhookAlert(
       apiSecret: bot.api_secret,
       password: bot.password
     });
+    const testnet = isTestnetMode(bot);
+    if (testnet) enableTestnet(exchange_client as unknown as Parameters<typeof enableTestnet>[0]);
 
     // Validate market and get current price
     const isValidMarket = await validateMarket(exchange_client, alert.symbol);
@@ -41,7 +44,8 @@ export async function processWebhookAlert(
     
     // Try to get ticker from cache first
     let ticker: TickerResult;
-    const cachedTicker = marketCache.get<TickerResult>(exchange_client.id, alert.symbol, 'ticker');
+    // Testnet prices differ from mainnet: never share the mainnet ticker cache.
+    const cachedTicker = testnet ? undefined : marketCache.get<TickerResult>(exchange_client.id, alert.symbol, 'ticker');
     
     if (cachedTicker) {
       logger.info('Using cached ticker for trade price', { 
@@ -58,7 +62,7 @@ export async function processWebhookAlert(
       ticker = await exchange_client.fetchTicker(alert.symbol);
       
       // Cache the ticker for future use
-      marketCache.set(exchange_client.id, alert.symbol, 'ticker', ticker);
+      if (!testnet) marketCache.set(exchange_client.id, alert.symbol, 'ticker', ticker);
     }
     
     if (!ticker.last) {

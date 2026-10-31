@@ -1,3 +1,4 @@
+import { assertTestnetClient } from '@/lib/exchanges/testnet';
 import { createHash } from 'crypto';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
@@ -370,6 +371,10 @@ export async function executeTrade(
         paper: true,
       } };
     }
+    if (isTestnetMode(bot)) {
+      // Hard stop: a testnet bot must never place an order on a mainnet client.
+      assertTestnetClient(exchange as unknown as Parameters<typeof assertTestnetClient>[0]);
+    }
     const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
     const clientOrderId = signalClientOrderId(bot.id, alert.alert_id, bot.exchange);
 
@@ -425,4 +430,8 @@ export function signalClientOrderId(botId: string, alertId: string | undefined, 
 
 export function isPaperMode(bot: BotData): boolean {
   return bot.mode === 'paper' || process.env.TRADING_MODE === 'paper';
+}
+
+export function isTestnetMode(bot: BotData): boolean {
+  return bot.mode === 'testnet';
 }
