@@ -5,6 +5,8 @@ import { ApiError } from '@/app/api/_middleware/api-handler'
 describe('Webhook workflow', () => {
   it('strips secret and normalizes action for valid alerts', () => {
     const payload = {
+      ts: new Date().toISOString(),
+      alert_id: 'test-alert',
       bot_id: 'ABC123',
       symbol: 'BTC/USDT',
       action: 'BUY',
@@ -17,6 +19,8 @@ describe('Webhook workflow', () => {
     const result = validateWebhookAlert(payload)
 
     expect(result).toEqual({
+      ts: payload.ts,
+      alert_id: 'test-alert',
       bot_id: 'ABC123',
       symbol: 'BTC/USDT',
       action: 'buy',

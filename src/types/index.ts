@@ -12,6 +12,8 @@ export type Bot = Database['public']['Tables']['bots']['Row'] & {
 
 // Trading View specific types
 export interface TradingViewSignal {
+  ts?: string
+  alert_id?: string
   // Required fields
   bot_id: string
   symbol: string
