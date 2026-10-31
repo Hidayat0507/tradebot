@@ -10,6 +10,7 @@ import ActivePositions from './components/active-positions'
 import PaperStrategies from './components/paper-strategies'
 import { splitByMode } from '@/lib/pnl-split'
 import { isPaperTradeId } from '@/lib/bot-config'
+import { resolveBotName } from '@/lib/format'
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -28,6 +29,12 @@ export default function DashboardPage() {
   const [isLoadingTrades, setIsLoadingTrades] = useState(true)
   const supabase = createClient()
 
+  // Bot names by id: fallback when the embedded join is missing (e.g. deleted FK, older rows)
+  const loadBotNames = useCallback(async () => {
+    const { data } = await supabase.from('bots').select('id, name')
+    return new Map<string, string>((data || []).map((b: { id: string; name: string }) => [b.id, b.name]))
+  }, [supabase])
+
   const fetchLogs = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -36,6 +43,7 @@ export default function DashboardPage() {
         console.error('No user found')
         return
       }
+      const botNames = await loadBotNames()
 
       const { data, error } = await supabase
         .from('logs')
@@ -62,7 +70,7 @@ export default function DashboardPage() {
       setLogs((data || []).map(log => ({
         id: log.id,
         botId: log.bot_id,
-        botName: log.bots ? log.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot',
+        botName: resolveBotName(log.bots, log.bot_id, botNames),
         timestamp: log.timestamp,
         type: log.type,
         message: log.message,
@@ -75,7 +83,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase])
+  }, [supabase, loadBotNames])
 
   const fetchTrades = useCallback(async () => {
     setIsLoadingTrades(true)
@@ -85,6 +93,7 @@ export default function DashboardPage() {
         console.error('No user found')
         return
       }
+      const botNames = await loadBotNames()
 
       // Fetch trades from database
       const { data: dbTrades, error } = await supabase
@@ -139,7 +148,7 @@ export default function DashboardPage() {
       const formattedDbTrades = (dbTrades || []).map(trade => ({
         id: trade.id,
         botId: trade.bot_id,
-        botName: trade.bots ? (trade.bots as any).name || 'Unknown Bot' : 'Unknown Bot',
+        botName: resolveBotName(trade.bots, trade.bot_id, botNames),
         symbol: trade.symbol,
         side: trade.side,
         status: trade.status,
@@ -157,7 +166,7 @@ export default function DashboardPage() {
         return {
           id: trade.id || log.id,
           botId: trade.bot_id || log.bot_id,
-          botName: log.details.botName || (log.bots && Array.isArray(log.bots) && log.bots.length > 0 ? log.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot'),
+          botName: log.details.botName || resolveBotName(log.bots, trade.bot_id || log.bot_id, botNames),
           symbol: trade.symbol,
           side: trade.side,
           status: trade.status,
@@ -178,7 +187,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingTrades(false)
     }
-  }, [supabase])
+  }, [supabase, loadBotNames])
 
   useEffect(() => {
     fetchLogs()

@@ -1,4 +1,5 @@
 'use client'
+import { formatBotUsage } from '@/lib/format'
 import { ORDER_SIZE } from '@/lib/bot-config'
 import { WebhookExample } from '@/components/bot/WebhookExample'
 
@@ -112,7 +113,7 @@ export function CreateBotForm() {
   const [showApiSecret, setShowApiSecret] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [botLimit, setBotLimit] = useState<number | null>(null)
-  const [currentBotCount, setCurrentBotCount] = useState(0)
+  const [currentBotCount, setCurrentBotCount] = useState<number | null>(null)
   const [plan, setPlan] = useState<string>('free')
   const [limitWarning, setLimitWarning] = useState<string | null>(null)
   const [generatedWebhookSecret, setGeneratedWebhookSecret] = useState<string | null>(null)
@@ -159,7 +160,7 @@ export function CreateBotForm() {
           throw countError
         }
 
-        setCurrentBotCount(count ?? 0)
+        setCurrentBotCount(typeof count === 'number' && Number.isFinite(count) ? count : null)
       } catch (err) {
         console.error('Failed to load bot usage limits', err)
         const message = err instanceof Error ? err.message : 'Unable to load bot usage limits'
@@ -196,7 +197,7 @@ export function CreateBotForm() {
         return
       }
 
-      if (botLimit !== null && currentBotCount >= botLimit) {
+      if (botLimit !== null && currentBotCount !== null && currentBotCount >= botLimit) {
         setError(`You have reached the ${botLimit} bot limit for the ${plan} plan.`)
         setIsSubmitting(false)
         return
@@ -324,8 +325,8 @@ export function CreateBotForm() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Plan usage</AlertTitle>
           <AlertDescription>
-            You are using {currentBotCount} of {botLimit} bots on the {plan} plan.
-            {currentBotCount >= botLimit ? ' Upgrade your plan to add more bots.' : ''}
+            {formatBotUsage(currentBotCount, botLimit, plan)}
+            {currentBotCount !== null && currentBotCount >= botLimit ? ' Upgrade your plan to add more bots.' : ''}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -363,7 +364,7 @@ export function CreateBotForm() {
                 <FormItem>
                   <FormLabel>Bot Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="My Trading Bot" {...field} value={field.value || ''} />
+                    <Input placeholder="e.g. BTC EMA Cross" {...field} value={field.value || ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -572,7 +573,7 @@ export function CreateBotForm() {
             type="submit"
             disabled={
               isSubmitting ||
-              (botLimit !== null && currentBotCount >= botLimit)
+              (botLimit !== null && currentBotCount !== null && currentBotCount >= botLimit)
             }
           >
             {isSubmitting ? 'Creating Bot...' : 'Create Bot'}

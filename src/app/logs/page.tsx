@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { resolveBotName } from '@/lib/format'
 import { createClient } from '@/utils/supabase/client'
 import LogsTable, { type LogEntry } from '@/components/logs-table'
 
@@ -51,7 +52,7 @@ export default function LogsPage() {
       setLogs(typedData.map(log => ({
         id: log.id,
         botId: log.bot_id,
-        botName: log.bots && Array.isArray(log.bots) && log.bots.length > 0 ? log.bots[0]?.name || 'Unknown Bot' : 'Unknown Bot',
+        botName: resolveBotName(log.bots, log.bot_id),
         timestamp: log.timestamp,
         type: log.type,
         message: log.message,
