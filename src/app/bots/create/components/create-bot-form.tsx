@@ -1,4 +1,6 @@
 'use client'
+import { ORDER_SIZE } from '@/lib/bot-config'
+import { WebhookExample } from '@/components/bot/WebhookExample'
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -86,9 +88,9 @@ const createBotFormSchema = z.object({
   name: z.string().min(3, 'Bot name must be at least 3 characters'),
   exchange: z.enum(['hyperliquid', 'bitget'] as const),
   pair: z.string().min(1, 'Trading pair is required'),
-  max_position_size: z.number()
-    .min(0.0001, 'Position size must be at least 0.0001')
-    .max(100000, 'Position size must be less than 100000'),
+  max_position_size: z.number({ invalid_type_error: 'Enter a percentage' })
+    .min(ORDER_SIZE.min, `Order size must be at least ${ORDER_SIZE.min}%`)
+    .max(ORDER_SIZE.max, `Order size cannot exceed ${ORDER_SIZE.max}% of balance`),
   stoploss_percentage: z.number()
     .min(0.1, 'Stoploss must be at least 0.1%')
     .max(50, 'Stoploss must be less than 50%')
@@ -114,6 +116,7 @@ export function CreateBotForm() {
   const [plan, setPlan] = useState<string>('free')
   const [limitWarning, setLimitWarning] = useState<string | null>(null)
   const [generatedWebhookSecret, setGeneratedWebhookSecret] = useState<string | null>(null)
+  const [createdBot, setCreatedBot] = useState<{ id: string; pair: string; orderSizePct: number } | null>(null)
   const [secretCopyStatus, setSecretCopyStatus] = useState<string | null>(null)
   const supabase = createClient()
   const form = useForm<CreateBotFormValues>({
@@ -121,7 +124,7 @@ export function CreateBotForm() {
     defaultValues: {
       name: '',
       pair: 'BTC/USDT',
-      max_position_size: 0.01,
+      max_position_size: ORDER_SIZE.default,
       exchange: 'bitget',
       api_key: '',
       api_secret: '',
@@ -237,7 +240,6 @@ export function CreateBotForm() {
         apiSecret: values.api_secret,
         password: values.exchange === 'bitget' ? values.password : undefined,
       }
-      console.log('Sending request to validate API:', requestBody)
 
       const response = await fetch('/api/exchange/validate', {
         method: 'POST',
@@ -249,7 +251,6 @@ export function CreateBotForm() {
       
       try {
         const data = await response.json()
-        console.log('Response data:', data)
 
         if (!response.ok) {
           // If validation fails, delete the bot we just created
@@ -265,6 +266,7 @@ export function CreateBotForm() {
         setValidationError(null)
         setSuccess('Bot created successfully! Copy your webhook secret below before leaving this page.')
         setGeneratedWebhookSecret(webhookSecretPlaintext)
+        setCreatedBot({ id: botId, pair: values.pair, orderSizePct: values.max_position_size })
         setSecretCopyStatus(null)
       } catch (error: any) {
         // If something goes wrong, delete the bot we just created
@@ -429,19 +431,21 @@ export function CreateBotForm() {
               name="max_position_size"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Max Position Size</FormLabel>
+                  <FormLabel>{ORDER_SIZE.label}</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      step="0.0001"
-                      placeholder="0.01"
+                      step="0.01"
+                      min={ORDER_SIZE.min}
+                      max={ORDER_SIZE.max}
+                      placeholder={String(ORDER_SIZE.default)}
                       {...field}
                       value={field.value || ''}
                       onChange={(e) => field.onChange(parseFloat(e.target.value))}
                     />
                   </FormControl>
                   <FormDescription>
-                    Maximum position size in base currency (e.g., BTC)
+                    {ORDER_SIZE.help}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -575,6 +579,13 @@ export function CreateBotForm() {
           </Button>
         </form>
       </Form>
+
+      {generatedWebhookSecret && createdBot && (
+        <div className="mt-6 rounded-lg border border-gray-700 p-4">
+          <h3 className="mb-3 font-semibold text-gray-100">Connect TradingView</h3>
+          <WebhookExample botId={createdBot.id} pair={createdBot.pair} secret={generatedWebhookSecret} orderSizePct={createdBot.orderSizePct} />
+        </div>
+      )}
 
       {generatedWebhookSecret && (
         <Alert className="mt-6 border-blue-200 text-blue-700 dark:border-blue-500/60 dark:text-blue-200">

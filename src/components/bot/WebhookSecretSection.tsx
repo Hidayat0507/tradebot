@@ -6,92 +6,46 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
-import { Bot } from '@/types';
+import { secretDisplay } from '@/lib/webhook-secret-display';
 
 interface WebhookSecretSectionProps {
-  bot: Bot;
+  bot: { id: string; webhook_secret?: string | null };
+  /** plaintext returned by the last regenerate in this session (shown once) */
+  freshSecret: string | null;
   onSecretRegenerated: (secret: string) => void;
 }
 
-export function WebhookSecretSection({ bot, onSecretRegenerated }: WebhookSecretSectionProps) {
+export function WebhookSecretSection({ bot, freshSecret, onSecretRegenerated }: WebhookSecretSectionProps) {
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const display = secretDisplay(bot.webhook_secret, freshSecret);
 
-  const handleRegenerateClick = async () => {
-    if (!bot.id) {
-      toast({
-        title: 'Error',
-        description: 'Bot ID is missing',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const regenerate = async () => {
+    setConfirming(false);
     try {
       setIsRegenerating(true);
-      
       const response = await fetch(`/api/bots/${bot.id}/webhook-secret`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
       });
-
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        console.error('Server error details:', responseData);
-        throw new Error(
-          responseData.error || 
-          `Failed to regenerate webhook secret (${response.status})`
-        );
+      const responseData = await response.json().catch(() => ({}));
+      if (!response.ok || !responseData.data?.webhook_secret) {
+        throw new Error(responseData.error || `Could not generate a new secret (${response.status})`);
       }
-
-      if (!responseData.success || !responseData.data?.webhook_secret) {
-        throw new Error('No webhook secret received from server');
-      }
-
       onSecretRegenerated(responseData.data.webhook_secret);
-      toast({
-        title: 'Success',
-        description: 'Webhook secret has been regenerated',
-      });
+      setCopied(false);
+      toast({ title: 'New secret generated', description: 'Copy it now and update your TradingView alerts. It will not be shown again.' });
     } catch (error) {
-      console.error('Failed to regenerate webhook secret:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
-        variant: 'destructive',
-      });
+      toast({ title: 'Could not generate secret', description: error instanceof Error ? error.message : 'Unexpected error', variant: 'destructive' });
     } finally {
       setIsRegenerating(false);
     }
   };
 
-  const handleCopyClick = () => {
-    if (!bot.webhook_secret) {
-      toast({
-        title: 'Error',
-        description: 'No webhook secret available to copy',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // If stored secret is hashed (sha256:...), prevent copying and ask to regenerate
-    if (bot.webhook_secret.startsWith('sha256:')) {
-      toast({
-        title: 'Secret not available',
-        description: 'For security, the stored secret is hashed. Click Regenerate Secret to get a new one.',
-      });
-      return;
-    }
-
-    navigator.clipboard.writeText(bot.webhook_secret);
-    toast({
-      title: 'Copied',
-      description: 'Webhook secret copied to clipboard',
-    });
+  const copy = async () => {
+    if (display.kind !== 'fresh') return;
+    await navigator.clipboard.writeText(display.value);
+    setCopied(true);
   };
 
   return (
@@ -99,40 +53,44 @@ export function WebhookSecretSection({ bot, onSecretRegenerated }: WebhookSecret
       <CardHeader>
         <CardTitle>Webhook Secret</CardTitle>
         <CardDescription>
-          Use this secret to authenticate webhook requests from TradingView
+          TradingView sends this in the <code>secret</code> field of every alert. It is stored hashed, so it can only be shown once — right after you generate it.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid w-full max-w-sm items-center gap-1.5">
-          <Label htmlFor="webhook-secret">Current Secret</Label>
-          <div className="flex space-x-2">
-            <Input
-              id="webhook-secret"
-              value={bot.webhook_secret || ''}
-              readOnly
-              type="text"
-              className="font-mono"
-              placeholder="No webhook secret available"
-            />
-            <Button
-              variant="ghost"
-              onClick={handleCopyClick}
-              disabled={!bot.webhook_secret}
-            >
-              Copy
-            </Button>
+        {display.kind === 'fresh' ? (
+          <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3" data-testid="secret-fresh">
+            <Label htmlFor="webhook-secret">Your new secret — copy it now</Label>
+            <div className="flex gap-2">
+              <Input id="webhook-secret" value={display.value} readOnly className="font-mono" onFocus={(e) => e.currentTarget.select()} />
+              <Button onClick={copy} aria-label="Copy webhook secret">{copied ? 'Copied' : 'Copy'}</Button>
+            </div>
+            <p className="text-sm text-amber-200">
+              This is the only time it is shown. Your old secret no longer works — update the alert message in TradingView.
+            </p>
           </div>
-        </div>
-        
-        <Button
-          variant="secondary"
-          onClick={handleRegenerateClick}
-          disabled={isRegenerating || !bot.id}
-        >
-          {isRegenerating ? 'Regenerating...' : 'Regenerate Secret'}
-        </Button>
-        
-        {/* Example removed here to avoid duplication. See the Webhook Configuration card above for the single TradingView example. */}
+        ) : (
+          <div className="rounded-md border border-gray-700 bg-gray-900/50 p-3 text-sm text-gray-300" data-testid="secret-hidden">
+            {display.kind === 'hidden'
+              ? 'A secret is set but hidden for security. Lost it? Generate a new one below.'
+              : 'No secret yet. Generate one to start receiving alerts.'}
+          </div>
+        )}
+
+        {confirming ? (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-gray-300">The current secret will stop working immediately.</span>
+            <Button variant="destructive" onClick={regenerate} disabled={isRegenerating}>Yes, generate new secret</Button>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+          </div>
+        ) : (
+          <Button
+            variant="secondary"
+            onClick={() => (display.kind === 'missing' ? regenerate() : setConfirming(true))}
+            disabled={isRegenerating || !bot.id}
+          >
+            {isRegenerating ? 'Generating…' : display.kind === 'missing' ? 'Generate secret' : 'Generate new secret'}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
