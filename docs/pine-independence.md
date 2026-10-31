@@ -109,3 +109,16 @@ explicit per-bot opt-in plus the existing order caps — out of scope for this P
 - Migration fix: column-level grants (a table-level UPDATE grant would override a column revoke),
   so `mode`, `last_candle_time`, `user_id`, `bot_id` are not user-updatable.
 - UI `/strategy`: "Save to bot" panel (bot, timeframe, paper size, enable checkbox unticked by default).
+
+## Phase 4 (feat/pine-phase4)
+- Dashboard card "Pine strategies (paper)": per-bot status (enabled / waiting / ok / stale, last candle,
+  last signal), recent paper trades (`external_id like 'paper-%'`), FIFO paper realized PnL + win rate.
+  API: `GET /api/strategy/dashboard` (user-scoped, RLS).
+- Migration `20261031000300_bot_strategies_last_signal.sql` (server-owned `last_signal_at`, `last_signal`).
+- **Real local Postgres without Docker:** `npm run test:db` runs PGlite (Postgres 17 in WASM, in-process).
+  `supabase/tests/local/bootstrap.sql` emulates Supabase roles (`anon`, `authenticated`, `service_role`),
+  `auth.uid()`, default grants, and the assumed base `bots`/`trades` tables; then every migration is applied
+  and RLS/grants are checked as real roles. Caveat: the bootstrap is an approximation of hosted Supabase
+  (base tables are not in this repo's migrations).
+- Known issue found: `20261031000000_webhook_signals.sql` declares `signals.bot_id text` referencing
+  `bots.id` — if `bots.id` is `uuid` (as in the RLS PR #8) the FK fails. Needs a follow-up migration.

@@ -52,7 +52,7 @@ describe('runPaperTick', () => {
     expect(alert).toMatchObject({ bot_id: 'bot-1', symbol: 'BTC/USDT', action: target.side, price: target.price })
     expect(alert.amount).toBeCloseTo(100 / target.price)
     expect(deps.fetchCandles).toHaveBeenCalledWith('binance', 'BTC/USDT', '1h', 500)
-    expect(deps.saveCursor).toHaveBeenCalledWith('bot-1', candles[target.index].time)
+    expect(deps.saveCursor).toHaveBeenCalledWith('bot-1', candles[target.index].time, expect.objectContaining({ time: target.time, summary: expect.stringContaining(target.side) }))
   })
   it('is idempotent: duplicate claim → no second order; no new candle → skipped', async () => {
     const { deps, target } = setup()

@@ -24,7 +24,8 @@ export interface SchedulerDeps {
   claimSignal(botId: string, alertId: string, tsIso: string): Promise<boolean>
   /** existing order path; always called with a paper-mode bot */
   executeOrder(alert: TradingViewSignal, bot: BotData): Promise<unknown>
-  saveCursor(botId: string, lastCandleTime: number): Promise<void>
+  /** advance cursor; lastSignal is the newest order sent this tick (for the dashboard) */
+  saveCursor(botId: string, lastCandleTime: number, lastSignal?: { time: number; summary: string }): Promise<void>
   now(): number
 }
 
@@ -118,6 +119,7 @@ export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Prom
       const intents = signalsToIntents(evaluate(s.definition, closed), closed).filter((i) => i.time > cursor)
       const paperBot: BotData = { ...s.bot, mode: 'paper' }
       let orders = 0
+      let lastSignal: { time: number; summary: string } | undefined
       for (const [seq, intent] of intents.entries()) {
         const alertId = `pine:${botId}:${intent.time}:${seq}:${intent.side}`
         const ts = new Date(intent.time + tf).toISOString()
@@ -127,8 +129,9 @@ export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Prom
           amount: s.paperQuoteSize / intent.price, alert_id: alertId, ts, strategy: s.definition.name,
         }, paperBot)
         orders++
+        lastSignal = { time: intent.time, summary: `${intent.side} ${intent.reason} @ ${intent.price}` }
       }
-      await deps.saveCursor(botId, lastClosed)
+      await deps.saveCursor(botId, lastClosed, lastSignal)
       results.push({ botId, status: 'ok', orders })
     } catch (e) {
       results.push({ botId, status: 'error', orders: 0, detail: (e as Error).message })
