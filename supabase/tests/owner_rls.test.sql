@@ -1,0 +1,83 @@
+-- LOCAL ONLY: run with `supabase test db` after local migrations.
+-- Fixtures and all changes are rolled back. No hosted project is needed.
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions;
+select no_plan();
+-- Count affected rows without using data-modifying CTEs inside assertions.
+create function pg_temp.affected(query text) returns integer
+language plpgsql security invoker as $$
+declare affected integer;
+begin
+  execute query;
+  get diagnostics affected = row_count;
+  return affected;
+end;
+$$;
+insert into auth.users (id) values ('10000000-0000-0000-0000-000000000001');
+insert into public.bots (id, user_id, name, exchange, pair, max_position_size, api_key, api_secret, webhook_secret) values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'fixture', 'bitget', 'BTC/USDT', 1, 'dummy', 'dummy', 'dummy');
+insert into public.trades (user_id, bot_id, external_id, symbol, side, status, size) values ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'fixture', 'BTC/USDT', 'buy', 'OPEN', 1);
+insert into public.logs (user_id, bot_id, type, message) values ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'info', 'fixture');
+insert into auth.users (id) values ('10000000-0000-0000-0000-000000000002');
+insert into public.bots (id, user_id, name, exchange, pair, max_position_size, api_key, api_secret, webhook_secret) values ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'fixture', 'bitget', 'BTC/USDT', 1, 'dummy', 'dummy', 'dummy');
+insert into public.trades (user_id, bot_id, external_id, symbol, side, status, size) values ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'fixture', 'BTC/USDT', 'buy', 'OPEN', 1);
+insert into public.logs (user_id, bot_id, type, message) values ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'info', 'fixture');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select is((select count(*)::integer from public.bots where user_id = '10000000-0000-0000-0000-000000000001'), 1, 'bots: owner can read');
+select is((select count(*)::integer from public.bots where user_id = '10000000-0000-0000-0000-000000000002'), 0, 'bots: cannot read another owner');
+select is(pg_temp.affected($$update public.bots set name = 'changed' where user_id = '10000000-0000-0000-0000-000000000001'$$), 1, 'bots: owner can update');
+select is(pg_temp.affected($$update public.bots set name = 'changed' where user_id = '10000000-0000-0000-0000-000000000002'$$), 0, 'bots: cannot update another owner');
+select is(pg_temp.affected($$delete from public.bots where user_id = '10000000-0000-0000-0000-000000000002'$$), 0, 'bots: cannot delete another owner');
+select lives_ok($$insert into public.bots (user_id, name, exchange, pair, max_position_size) values ('10000000-0000-0000-0000-000000000001', 'client', 'bitget', 'BTC/USDT', 1)$$, 'bots: owner can insert');
+select throws_ok($$insert into public.bots (user_id, name, exchange, pair, max_position_size) values ('10000000-0000-0000-0000-000000000002', 'client', 'bitget', 'BTC/USDT', 1)$$, '42501', null, 'bots: cannot insert as another owner');
+select is((select count(*)::integer from public.trades where user_id = '10000000-0000-0000-0000-000000000001'), 1, 'trades: owner can read');
+select is((select count(*)::integer from public.trades where user_id = '10000000-0000-0000-0000-000000000002'), 0, 'trades: cannot read another owner');
+select is(pg_temp.affected($$update public.trades set status = 'CLOSED' where user_id = '10000000-0000-0000-0000-000000000001'$$), 1, 'trades: owner can update');
+select is(pg_temp.affected($$update public.trades set status = 'CLOSED' where user_id = '10000000-0000-0000-0000-000000000002'$$), 0, 'trades: cannot update another owner');
+select is(pg_temp.affected($$delete from public.trades where user_id = '10000000-0000-0000-0000-000000000002'$$), 0, 'trades: cannot delete another owner');
+select lives_ok($$insert into public.trades (user_id, bot_id, external_id, symbol, side, status, size) values ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'client', 'BTC/USDT', 'buy', 'OPEN', 1)$$, 'trades: owner can insert');
+select throws_ok($$insert into public.trades (user_id, bot_id, external_id, symbol, side, status, size) values ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'client', 'BTC/USDT', 'buy', 'OPEN', 1)$$, '42501', null, 'trades: cannot insert as another owner');
+select throws_ok($$update public.trades set user_id = '10000000-0000-0000-0000-000000000002' where user_id = '10000000-0000-0000-0000-000000000001'$$, '42501', null, 'trades: cannot transfer ownership');
+select is((select count(*)::integer from public.logs where user_id = '10000000-0000-0000-0000-000000000001'), 1, 'logs: owner can read');
+select is((select count(*)::integer from public.logs where user_id = '10000000-0000-0000-0000-000000000002'), 0, 'logs: cannot read another owner');
+select is(pg_temp.affected($$update public.logs set message = 'changed' where user_id = '10000000-0000-0000-0000-000000000001'$$), 1, 'logs: owner can update');
+select is(pg_temp.affected($$update public.logs set message = 'changed' where user_id = '10000000-0000-0000-0000-000000000002'$$), 0, 'logs: cannot update another owner');
+select is(pg_temp.affected($$delete from public.logs where user_id = '10000000-0000-0000-0000-000000000002'$$), 0, 'logs: cannot delete another owner');
+select lives_ok($$insert into public.logs (user_id, bot_id, type, message) values ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'info', 'client')$$, 'logs: owner can insert');
+select throws_ok($$insert into public.logs (user_id, bot_id, type, message) values ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'info', 'client')$$, '42501', null, 'logs: cannot insert as another owner');
+select throws_ok($$update public.logs set user_id = '10000000-0000-0000-0000-000000000002' where user_id = '10000000-0000-0000-0000-000000000001'$$, '42501', null, 'logs: cannot transfer ownership');
+-- Owner SELECT is intentionally retained; only credential writes are restricted.
+select ok(has_column_privilege('authenticated', 'public.bots', 'api_key', 'SELECT'), 'owner credential reads remain supported');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'api_key', 'INSERT'), 'client cannot insert api_key');
+select throws_ok($$insert into public.bots (user_id, name, exchange, pair, max_position_size, api_key) values ('10000000-0000-0000-0000-000000000001', 'bad', 'bitget', 'BTC/USDT', 1, 'forbidden')$$, '42501', null, 'api_key: insert denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'api_key', 'UPDATE'), 'client cannot update api_key');
+select throws_ok($$update public.bots set api_key = 'forbidden' where user_id = '10000000-0000-0000-0000-000000000001'$$, '42501', null, 'api_key: update denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'api_secret', 'INSERT'), 'client cannot insert api_secret');
+select throws_ok($$insert into public.bots (user_id, name, exchange, pair, max_position_size, api_secret) values ('10000000-0000-0000-0000-000000000001', 'bad', 'bitget', 'BTC/USDT', 1, 'forbidden')$$, '42501', null, 'api_secret: insert denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'api_secret', 'UPDATE'), 'client cannot update api_secret');
+select throws_ok($$update public.bots set api_secret = 'forbidden' where user_id = '10000000-0000-0000-0000-000000000001'$$, '42501', null, 'api_secret: update denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'webhook_secret', 'INSERT'), 'client cannot insert webhook_secret');
+select throws_ok($$insert into public.bots (user_id, name, exchange, pair, max_position_size, webhook_secret) values ('10000000-0000-0000-0000-000000000001', 'bad', 'bitget', 'BTC/USDT', 1, 'forbidden')$$, '42501', null, 'webhook_secret: insert denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'webhook_secret', 'UPDATE'), 'client cannot update webhook_secret');
+select throws_ok($$update public.bots set webhook_secret = 'forbidden' where user_id = '10000000-0000-0000-0000-000000000001'$$, '42501', null, 'webhook_secret: update denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'password', 'INSERT'), 'client cannot insert password');
+select throws_ok($$insert into public.bots (user_id, name, exchange, pair, max_position_size, password) values ('10000000-0000-0000-0000-000000000001', 'bad', 'bitget', 'BTC/USDT', 1, 'forbidden')$$, '42501', null, 'password: insert denied at runtime');
+select ok(not has_column_privilege('authenticated', 'public.bots', 'password', 'UPDATE'), 'client cannot update password');
+select throws_ok($$update public.bots set password = 'forbidden' where user_id = '10000000-0000-0000-0000-000000000001'$$, '42501', null, 'password: update denied at runtime');
+select throws_ok($$update public.bots set user_id = '10000000-0000-0000-0000-000000000002'$$, '42501', null, 'bots: ownership changes denied');
+select lives_ok($$delete from public.logs$$, 'owner can delete own logs');
+select lives_ok($$delete from public.trades$$, 'owner can delete own trades');
+select lives_ok($$delete from public.bots$$, 'owner can delete own bots');
+reset role;
+select is((select count(*)::integer from public.bots where user_id = '10000000-0000-0000-0000-000000000002'), 1, 'other owner bot survives deletes');
+set local role service_role;
+select lives_ok($$update public.bots set api_key = 'service', api_secret = 'service', webhook_secret = 'service', password = 'service' where id = '20000000-0000-0000-0000-000000000002'$$, 'service role can write credentials across owners');
+reset role;
+set local role anon;
+select throws_ok($$select * from public.bots$$, '42501', null, 'anonymous access denied');
+select throws_ok($$select * from public.trades$$, '42501', null, 'anonymous trades access denied');
+select throws_ok($$select * from public.logs$$, '42501', null, 'anonymous logs access denied');
+reset role;
+select * from finish();
+rollback;
