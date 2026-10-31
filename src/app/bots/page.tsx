@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
+import { ModeBadge } from '@/components/bot/ModeBadge'
+import { formatOrderSizePct, modeOf, ORDER_SIZE } from '@/lib/bot-config'
 
 type Bot = {
+  mode?: 'live' | 'paper'
   id: string
   user_id: string
   name: string
@@ -14,8 +17,6 @@ type Bot = {
   max_position_size: number
   stoploss_percentage?: number
   enabled: boolean
-  api_key: string
-  api_secret: string
   created_at: string
   updated_at: string
 }
@@ -38,7 +39,7 @@ export default function BotsPage() {
       setError(null)
       const { data, error: loadError } = await supabase
         .from('bots')
-        .select('*')
+        .select('id, user_id, name, exchange, pair, max_position_size, stoploss_percentage, enabled, mode, created_at, updated_at')
         .order('created_at', { ascending: false })
 
       if (loadError) throw loadError
@@ -108,7 +109,7 @@ export default function BotsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Exchange</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pair</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Max Position</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Order size</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stoploss</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
@@ -117,10 +118,10 @@ export default function BotsPage() {
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {bots.map(bot => (
               <tr key={bot.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{bot.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{bot.name} <ModeBadge mode={modeOf(bot)} className="ml-2" /></td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{bot.exchange}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{bot.pair}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${bot.max_position_size}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" title={ORDER_SIZE.help}>{formatOrderSizePct(bot.max_position_size)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {bot.stoploss_percentage ? `${bot.stoploss_percentage}%` : '-'}
                 </td>

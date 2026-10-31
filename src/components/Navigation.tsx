@@ -82,6 +82,7 @@ export default function Navigation() {
           <div className="flex items-center gap-2">
             <NavLink href="/dashboard">Dashboard</NavLink>
             <NavLink href="/bots">Bots</NavLink>
+            <NavLink href="/strategy">Strategies</NavLink>
             <NavLink href="/assets">Assets</NavLink>
             {user && isAdmin && (
               <NavLink href="/admin">Admin</NavLink>

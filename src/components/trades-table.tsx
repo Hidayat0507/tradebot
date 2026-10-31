@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
+import { ModeBadge } from "@/components/bot/ModeBadge"
 
 export type TradeEntry = {
   id: string
@@ -26,6 +27,7 @@ export type TradeEntry = {
   pnl: number | null
   timestamp: string
   simulated?: boolean
+  paper?: boolean
 }
 
 interface TradesTableProps {
@@ -140,6 +142,7 @@ export default function TradesTable({ trades, isLoading, onRefresh }: TradesTabl
                 <TableRow key={trade.id}>
                   <TableCell className="font-medium">
                     {trade.botName || trade.botId}
+                    <ModeBadge mode={trade.paper || trade.simulated ? 'paper' : 'live'} className="ml-2" />
                     {trade.simulated && (
                       <Badge variant="secondary" className="ml-2 text-xs">
                         Simulated

@@ -8,7 +8,7 @@ const protectedRoutes = [
   '/bots', 
   '/bots/create', 
   '/dashboard', 
-  '/profile', '/admin', '/logs', '/billing', '/assets'
+  '/profile', '/admin', '/logs', '/billing', '/assets', '/strategy'
 ]
 
 // Check if a route should bypass authentication
