@@ -1,5 +1,6 @@
 'use client'
 
+import { APP_NAME } from '@/lib/format'
 import { login, signup, signInWithGoogle } from './actions'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -125,7 +126,7 @@ export default function AuthPage() {
           
           <div className="relative z-10">
             <Link href="/" className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Trading Bot
+              {APP_NAME}
             </Link>
             <p className="mt-4 text-lg text-white/70">
               Automate your crypto trading with TradingView signals
@@ -189,7 +190,7 @@ export default function AuthPage() {
             {/* Mobile Logo */}
             <div className="lg:hidden text-center">
               <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Trading Bot
+                {APP_NAME}
               </Link>
             </div>
 

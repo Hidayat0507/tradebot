@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/lib/format'
 import type { Metadata } from "next"
 import "./globals.css"
 import ConditionalNavigation from "@/components/ConditionalNavigation"
@@ -5,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: "Trading Bot",
+  title: APP_NAME,
   description: "TradingView to Crypto Exchange Bot",
 }
 
