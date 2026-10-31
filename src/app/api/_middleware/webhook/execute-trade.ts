@@ -67,6 +67,16 @@ export async function executeTrade(
     }
 
     if (!Number.isFinite(price) || price <= 0) throw new ApiError('Invalid ticker price', 400);
+    // Keep main's Hyperliquid signing setup for live orders.
+    if (bot.exchange.toLowerCase() === 'hyperliquid') {
+      exchange.options = {
+        ...((exchange.options ?? {}) as Record<string, unknown>),
+        apiKey: bot.api_key,
+        secret: bot.api_secret,
+        privateKey: bot.api_secret,
+        walletAddress: bot.api_key,
+      };
+    }
     if (alert.price !== undefined && (!Number.isFinite(alert.price) || alert.price <= 0 ||
       Math.abs(alert.price - price) / price > 0.02)) {
       throw new ApiError('Alert price deviates more than 2% from ticker', 400);

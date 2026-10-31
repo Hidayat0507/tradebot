@@ -44,7 +44,7 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
         const numValue = typeof value === 'string' ? parseFloat(value) : value;
         return typeof numValue === 'undefined' || 
           (typeof numValue === 'number' && Number.isFinite(numValue) && numValue > 0 && numValue <= 100) ||
-          'Order size must be greater than 0 and at most 100 percent';
+          'order_size must be a percent of balance between 0 and 100';
       }
     }
   );
