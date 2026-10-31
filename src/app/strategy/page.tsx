@@ -5,10 +5,15 @@ import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { SAMPLE_PINE } from '@/lib/strategy/samples'
 import { PUBLIC_EXCHANGES, TIMEFRAMES } from '@/lib/strategy/exchanges'
+import { friendlyPineError, SUPPORTED_PINE } from '@/lib/strategy/friendly-error'
+
+/** Shared dark-theme-safe field style (matches components/ui/input). */
+const FIELD = 'rounded-lg border border-gray-200 bg-gray-50 text-gray-900 placeholder:text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const SAMPLE_LABELS: Record<string, string> = { emaCross: 'EMA cross', rsi: 'RSI reversion', smaLongShort: 'SMA long/short', macdAtrStops: 'MACD + ATR stops' }
 
 type Trade = { id: string; direction: string; entryTime: number; entryPrice: number; exitTime: number; exitPrice: number; pnlPct: number; exitReason: string; open?: boolean }
 type Preview =
-  | { ok: false; error: string }
+  | { ok: false; error: string; status?: number }
   | {
       ok: true; mode: 'paper'; via: string; warnings: string[]; definition: unknown; candleSource: string
       candleCount: number; candles: { time: number; close: number }[]
@@ -47,7 +52,7 @@ export default function StrategyPage() {
       const data = await res.json().catch(() => ({}))
       setSaveMsg(res.ok
         ? { ok: true, text: `Saved (${enabled ? 'enabled' : 'disabled'}, paper, ${timeframe}).` }
-        : { ok: false, text: data.error ?? `HTTP ${res.status}` })
+        : { ok: false, text: (() => { const f = friendlyPineError(data.error ?? '', pine, res.status === 422 ? undefined : res.status); return `${f.title}${f.line ? ` (line ${f.line})` : ''}. ${f.hint}` })() })
     } catch (e) {
       setSaveMsg({ ok: false, text: (e as Error).message })
     } finally {
@@ -66,9 +71,9 @@ export default function StrategyPage() {
         }),
       })
       const data = await res.json()
-      setResult(data.ok === undefined ? { ok: false, error: data.error ?? `HTTP ${res.status}` } : data)
-    } catch (e) {
-      setResult({ ok: false, error: (e as Error).message })
+      setResult(data.ok === undefined || !res.ok ? { ok: false, error: data.error ?? `HTTP ${res.status}`, status: res.ok || res.status === 422 ? undefined : res.status } : data)
+    } catch {
+      setResult({ ok: false, error: 'Network error — check your connection and try again.' })
     } finally {
       setLoading(false)
     }
@@ -79,24 +84,34 @@ export default function StrategyPage() {
       <div>
         <h1 className="text-2xl font-bold">Pine strategy (preview)</h1>
         <p className="text-sm text-muted-foreground">
-          Paste a Pine v5 strategy. Supported: ta.sma/ema/rsi/crossover/crossunder, strategy.entry/close.
-          <span className="ml-1 rounded bg-yellow-100 px-1 text-yellow-900">Paper mode — no real orders.</span>
+          Paste a Pine v5 strategy, preview it, and backtest it here.
+          <span className="ml-2 rounded bg-amber-400/15 px-2 py-0.5 text-amber-300 ring-1 ring-amber-400/40">Paper mode — no real orders</span>
         </p>
       </div>
-      <div className="flex gap-2">
+      <details className="rounded-lg border border-gray-700 bg-gray-900/40 p-3 text-sm text-gray-300">
+        <summary className="cursor-pointer font-medium text-gray-100">What Pine is supported?</summary>
+        <ul className="mt-2 space-y-1">
+          <li><span className="text-gray-400">Indicators:</span> {SUPPORTED_PINE.indicators.join(', ')}</li>
+          <li><span className="text-gray-400">Orders:</span> {SUPPORTED_PINE.orders.join(', ')}</li>
+          <li><span className="text-gray-400">Also:</span> {SUPPORTED_PINE.other.join(', ')}</li>
+        </ul>
+      </details>
+      <div className="flex flex-wrap gap-2">
+        <span className="self-center text-sm text-gray-400">Examples:</span>
         {Object.entries(SAMPLE_PINE).map(([k, v]) => (
-          <Button key={k} variant="outline" size="sm" onClick={() => setPine(v)}>{k}</Button>
+          <Button key={k} variant="outline" size="sm" onClick={() => setPine(v)}>{SAMPLE_LABELS[k] ?? k}</Button>
         ))}
       </div>
       <textarea
-        className="h-64 w-full rounded border p-3 font-mono text-sm"
+        className={`${FIELD} h-64 w-full p-3 font-mono text-sm`}
+        aria-label="Pine Script source"
         value={pine}
         onChange={(e) => setPine(e.target.value)}
         spellCheck={false}
       />
       <div className="flex flex-wrap items-end gap-3 text-sm">
         <label className="flex flex-col gap-1">Candles
-          <select className="rounded border p-2" value={source} onChange={(e) => setSource(e.target.value as 'sample' | 'exchange')}>
+          <select className={`${FIELD} p-2`} value={source} onChange={(e) => setSource(e.target.value as 'sample' | 'exchange')}>
             <option value="sample">Sample (offline)</option>
             <option value="exchange">Exchange public data</option>
           </select>
@@ -104,15 +119,15 @@ export default function StrategyPage() {
         {source === 'exchange' && (
           <>
             <label className="flex flex-col gap-1">Exchange
-              <select className="rounded border p-2" value={exchange} onChange={(e) => setExchange(e.target.value)}>
+              <select className={`${FIELD} p-2`} value={exchange} onChange={(e) => setExchange(e.target.value)}>
                 {PUBLIC_EXCHANGES.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1">Symbol
-              <input className="w-36 rounded border p-2" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="BTC/USDT" />
+              <input className={`${FIELD} w-36 p-2`} value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="BTC/USDT" />
             </label>
             <label className="flex flex-col gap-1">Timeframe
-              <select className="rounded border p-2" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+              <select className={`${FIELD} p-2`} value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
                 {TIMEFRAMES.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
@@ -126,21 +141,21 @@ export default function StrategyPage() {
         {bots.length === 0 ? <p className="text-muted-foreground">No bots yet.</p> : (
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">Bot
-              <select className="rounded border p-2" value={botId} onChange={(e) => setBotId(e.target.value)}>
+              <select className={`${FIELD} p-2`} value={botId} onChange={(e) => setBotId(e.target.value)}>
                 {bots.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.pair})</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1">Timeframe
-              <select className="rounded border p-2" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+              <select className={`${FIELD} p-2`} value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
                 {TIMEFRAMES.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1">Paper order size (quote)
-              <input type="number" min={1} max={1000000} className="w-32 rounded border p-2" value={quoteSize}
+              <input type="number" min={1} max={1000000} className={`${FIELD} w-32 p-2`} value={quoteSize}
                 onChange={(e) => setQuoteSize(Number(e.target.value))} />
             </label>
             <label className="flex items-center gap-2 pb-2">
-              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              <input type="checkbox" className="h-4 w-4 accent-amber-400" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
               Enable paper scheduler
             </label>
             <Button onClick={save} disabled={saving || !botId}>{saving ? 'Saving…' : 'Save strategy'}</Button>
@@ -150,7 +165,16 @@ export default function StrategyPage() {
         {saveMsg && <p className={saveMsg.ok ? 'text-green-700' : 'text-red-700'}>{saveMsg.text}</p>}
       </section>
 
-      {result && !result.ok && <pre className="whitespace-pre-wrap rounded bg-red-50 p-3 text-sm text-red-800">{result.error}</pre>}
+      {result && !result.ok && (() => {
+        const f = friendlyPineError(result.error, pine, result.status)
+        return (
+          <div role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm" data-testid="pine-error">
+            <p className="font-semibold text-red-200">{f.title}{f.line ? ` (line ${f.line})` : ''}</p>
+            {f.lineText && <pre className="mt-2 overflow-x-auto rounded bg-gray-950 p-2 font-mono text-xs text-red-100"><span className="mr-3 select-none text-gray-500">{f.line}</span>{f.lineText}</pre>}
+            <p className="mt-2 text-gray-200">{f.hint}</p>
+          </div>
+        )
+      })()}
       {result && result.ok && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">

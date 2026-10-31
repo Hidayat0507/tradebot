@@ -8,6 +8,8 @@ import MarketOverview from './components/market-overview'
 import TradingInsights from './components/trading-insights'
 import ActivePositions from './components/active-positions'
 import PaperStrategies from './components/paper-strategies'
+import { splitByMode } from '@/lib/pnl-split'
+import { isPaperTradeId } from '@/lib/bot-config'
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -99,6 +101,7 @@ export default function DashboardPage() {
           size,
           price,
           pnl,
+          external_id,
           created_at
         `)
         .eq('user_id', user.id)
@@ -144,7 +147,8 @@ export default function DashboardPage() {
         price: trade.price,
         pnl: trade.pnl,
         timestamp: trade.created_at,
-        simulated: false
+        simulated: false,
+        paper: isPaperTradeId((trade as { external_id?: string }).external_id),
       }))
 
       // Process simulated trades from logs
@@ -182,11 +186,9 @@ export default function DashboardPage() {
   }, [fetchLogs, fetchTrades])
 
   // Calculate stats
-  const activeTrades = trades.filter(t => t.status === 'open' || t.status === 'pending').length
-  const totalTrades = trades.length
-  const recentPnl = trades
-    .filter(t => t.pnl !== null && new Date(t.timestamp) > new Date(Date.now() - 24 * 60 * 60 * 1000))
-    .reduce((sum, trade) => sum + (trade.pnl || 0), 0)
+  const split = splitByMode(trades)
+  const activeTrades = split.liveTrades.filter(t => t.status === 'open' || t.status === 'pending').length
+  const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(2)}`
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 md:p-8">
@@ -228,22 +230,29 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatsCard 
-            title="Active Positions" 
-            value={activeTrades.toString()} 
-            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out"
+        {/* Stats Overview: live (real money) and paper (simulated) never mixed */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4" data-testid="kpis">
+          <StatsCard
+            title="Live P&L (24h)"
+            value={money(split.live.pnl24h)}
+            description={`Real orders · ${split.live.trades} trades`}
+            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg ring-1 ring-rose-500/30"
           />
-          <StatsCard 
-            title="24h Profit/Loss" 
-            value={`$${recentPnl.toFixed(2)}`} 
-            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out"
+          <StatsCard
+            title="Paper P&L (24h)"
+            value={money(split.paper.pnl24h)}
+            description={`Simulated, no real money · ${split.paper.trades} trades`}
+            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg ring-1 ring-amber-400/30"
           />
-          <StatsCard 
-            title="Total Trades" 
-            value={totalTrades.toString()} 
-            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out"
+          <StatsCard
+            title="Open live positions"
+            value={activeTrades.toString()}
+            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg"
+          />
+          <StatsCard
+            title="Total trades"
+            value={`${split.live.trades} live · ${split.paper.trades} paper`}
+            className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg"
           />
         </div>
 
@@ -283,13 +292,13 @@ export default function DashboardPage() {
         <PaperStrategies />
 
         {/* Active Positions Section with Unrealized P&L */}
-        <ActivePositions trades={trades} />
+        <ActivePositions trades={split.liveTrades} />
 
         {/* Market Overview Section */}
         <MarketOverview />
 
         {/* Trading Insights Section */}
-        <TradingInsights trades={trades} />
+        <TradingInsights trades={split.liveTrades} />
 
         {/* Activity Logs */}
         <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out">
