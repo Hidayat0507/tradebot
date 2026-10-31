@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-// note: using request-scoped Supabase from getAuthenticatedUser
+import { createServiceClient } from '@/utils/supabase/server'
 import { encrypt } from '@/utils/encryption';
 import { randomBytes, createHash } from 'crypto';
 import type { Database } from '@/lib/database/schema'
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     // Add password property using type assertion to bypass linter
     const botDataWithPassword: BotInsert & { password?: string } = { ...botData, ...(password ? { password } : {}) };
 
-    const { data: bot, error } = await supabase
+    const { data: bot, error } = await createServiceClient()
       .from('bots')
       .insert(botDataWithPassword)
       .select()
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Bot created successfully', { botId: bot.id, userId: user.id });
-    return successResponse(bot, 201);
+    return successResponse({ ...bot, webhook_secret: webhookSecret }, 201);
   } catch (error) {
     return handleApiError(error);
   }
