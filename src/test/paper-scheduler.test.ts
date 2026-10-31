@@ -90,3 +90,34 @@ describe('paperOrderPath', () => {
     await expect(paperOrderPath({})({ bot_id: 'b', symbol: 'BTC/USDT', action: 'buy' }, { ...bot, mode: 'live' })).rejects.toThrow(/paper only/)
   })
 })
+
+describe('strategy.exit monitoring', () => {
+  const bar = (i: number, o: number, h: number, l: number, c: number) => ({ time: i * HOUR, open: o, high: h, low: l, close: c, volume: 1 })
+  const exitDef = parsePine('strategy("x")\nif close == 100\n    strategy.entry("L", strategy.long)\nstrategy.exit("X", "L", stop = 97, limit = 104)')
+  it('stop hit → sell at stop', () => {
+    const cs = [bar(0, 100, 101, 99, 100), bar(1, 100, 101, 96, 98), bar(2, 98, 99, 97, 98)]
+    const out = signalsToIntents(evaluate(exitDef, cs), cs)
+    expect(out.map((o) => [o.side, o.reason, o.price, o.index])).toEqual([['buy', 'entry:L', 100, 0], ['sell', 'stop:L', 97, 1]])
+  })
+  it('limit hit → sell at limit; gap through stop → fill at open', () => {
+    const lim = [bar(0, 100, 101, 99, 100), bar(1, 101, 105, 100, 103)]
+    expect(signalsToIntents(evaluate(exitDef, lim), lim)[1]).toMatchObject({ side: 'sell', reason: 'limit:L', price: 104 })
+    const gap = [bar(0, 100, 101, 99, 100), bar(1, 95, 96, 94, 95)]
+    expect(signalsToIntents(evaluate(exitDef, gap), gap)[1]).toMatchObject({ reason: 'stop:L', price: 95 })
+  })
+  it('scheduler sends the stop as a paper sell on the next tick', async () => {
+    const cs = [bar(0, 99, 99, 98, 99), bar(1, 99, 101, 99, 100), bar(2, 100, 101, 96, 98), bar(3, 98, 99, 97, 98)]
+    const executeOrder = vi.fn().mockResolvedValue({})
+    const deps: SchedulerDeps = {
+      loadEnabled: async () => [{ bot, definition: exitDef, timeframe: '1h', paperQuoteSize: 100, lastCandleTime: cs[1].time }],
+      fetchCandles: async () => cs,
+      claimSignal: async () => true,
+      executeOrder,
+      saveCursor: async () => {},
+      now: () => cs[2].time + HOUR + 1, // bar 3 still open
+    }
+    expect((await runPaperTick(deps))[0].orders).toBe(1)
+    expect(executeOrder.mock.calls[0][0]).toMatchObject({ action: 'sell', price: 97 })
+    expect(executeOrder.mock.calls[0][1].mode).toBe('paper')
+  })
+})

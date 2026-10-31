@@ -37,28 +37,53 @@ export interface OrderIntent {
 }
 
 /**
- * Replays signals through a single-position state machine and returns market order intents.
- * Deterministic from history, so the current position is reconstructed on every tick.
- * strategy.exit stop/limit are not executed here yet (needs intrabar monitoring) – backtest only.
+ * Replays signals (and, when candles are given, strategy.exit stop/limit levels) through a
+ * single-position state machine and returns market order intents. Deterministic from history,
+ * so the current position is reconstructed on every tick.
+ *
+ * Bar order per candle i: (1) a pending exit order (placed at an earlier bar's close) is checked
+ * against bar i's high/low — stop first, gaps fill at open; (2) bar i's close signals are applied.
+ * A stop/limit hit is therefore reported on the tick after bar i closes, at the stop/limit price.
  */
-export function signalsToIntents(signals: Signal[]): OrderIntent[] {
+export function signalsToIntents(signals: Signal[], candles?: Candle[]): OrderIntent[] {
   type Pos = { id: string; dir: 'long' | 'short' }
   let pos = null as Pos | null
+  let exitOrder = null as { stop?: number; limit?: number } | null
   const cur = (): Pos | null => pos
   const out: OrderIntent[] = []
-  const flat = (s: Signal, reason: string) => {
-    if (!pos) return
-    out.push({ index: s.index, time: s.time, side: pos.dir === 'long' ? 'sell' : 'buy', reason, price: s.price })
+  const flat = (index: number, time: number, price: number, reason: string) => {
+    const p = cur()
+    if (!p) return
+    out.push({ index, time, side: p.dir === 'long' ? 'sell' : 'buy', reason, price })
     pos = null
+    exitOrder = null
   }
-  for (const s of signals) {
-    if (s.action === 'close_all') flat(s, 'close_all')
-    else if (s.action === 'close' && cur()?.id === s.id) flat(s, `close:${s.id}`)
-    else if (s.action === 'entry' && s.direction) {
-      if (cur()?.dir === s.direction) continue
-      flat(s, `reverse:${s.id}`)
-      out.push({ index: s.index, time: s.time, side: s.direction === 'long' ? 'buy' : 'sell', reason: `entry:${s.id}`, price: s.price })
-      pos = { id: s.id, dir: s.direction }
+  const byBar = new Map<number, Signal[]>()
+  for (const s of signals) byBar.set(s.index, [...(byBar.get(s.index) ?? []), s])
+  const bars = candles ? candles.length : signals.reduce((m, s) => Math.max(m, s.index + 1), 0)
+  for (let i = 0; i < bars; i++) {
+    const p = cur()
+    const bar = candles?.[i]
+    if (bar && p && exitOrder) {
+      const long = p.dir === 'long'
+      const { stop, limit } = exitOrder as { stop?: number; limit?: number }
+      if (stop !== undefined && (long ? bar.low <= stop : bar.high >= stop)) {
+        flat(i, bar.time, long ? Math.min(bar.open, stop) : Math.max(bar.open, stop), `stop:${p.id}`)
+      } else if (limit !== undefined && (long ? bar.high >= limit : bar.low <= limit)) {
+        flat(i, bar.time, long ? Math.max(bar.open, limit) : Math.min(bar.open, limit), `limit:${p.id}`)
+      }
+    }
+    for (const s of byBar.get(i) ?? []) {
+      if (s.action === 'close_all') flat(s.index, s.time, s.price, 'close_all')
+      else if (s.action === 'close' && cur()?.id === s.id) flat(s.index, s.time, s.price, `close:${s.id}`)
+      else if (s.action === 'entry' && s.direction) {
+        if (cur()?.dir === s.direction) continue
+        flat(s.index, s.time, s.price, `reverse:${s.id}`)
+        out.push({ index: s.index, time: s.time, side: s.direction === 'long' ? 'buy' : 'sell', reason: `entry:${s.id}`, price: s.price })
+        pos = { id: s.id, dir: s.direction }
+      } else if (s.action === 'exit' && cur() && (s.fromEntry === undefined || s.fromEntry === cur()!.id)) {
+        exitOrder = { stop: s.stop, limit: s.limit }
+      }
     }
   }
   return out
@@ -90,7 +115,7 @@ export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Prom
       }
       // First run only acts on the latest closed bar: never replay history into orders.
       const cursor = s.lastCandleTime ?? closed[closed.length - 2].time
-      const intents = signalsToIntents(evaluate(s.definition, closed)).filter((i) => i.time > cursor)
+      const intents = signalsToIntents(evaluate(s.definition, closed), closed).filter((i) => i.time > cursor)
       const paperBot: BotData = { ...s.bot, mode: 'paper' }
       let orders = 0
       for (const [seq, intent] of intents.entries()) {
