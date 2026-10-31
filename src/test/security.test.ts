@@ -30,7 +30,7 @@ let ip = 0
 function webhook(secret = 'correct', bot = 'bot', address = `test-${++ip}`) {
   return new NextRequest('http://localhost/api/webhook', { method: 'POST',
     headers: { 'x-forwarded-for': address, 'content-type': 'application/json' },
-    body: JSON.stringify({ bot_id: bot, secret, ts: Math.floor(Date.now() / 1000), alert_id: `alert-${ip}`, symbol: 'BTC/USDT', action: 'buy', price: 100, amount: 2,
+    body: JSON.stringify({ bot_id: bot, secret, symbol: 'BTC/USDT', action: 'buy', price: 100, amount: 2,
       ts: new Date().toISOString(), alert_id: `a-${ip}` }) })
 }
 const bot = { id: 'bot', exchange: 'bitget', api_key: 'test', api_secret: 'encrypted',
@@ -49,7 +49,6 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 describe('webhook security', () => {
   it('fails closed on decryption failure without initializing an exchange or trading', async () => {
     vi.stubEnv('TRADING_MODE', 'live')
-    vi.stubEnv('TRADING_MODE', 'live')
     mocks.decrypt.mockRejectedValue(new Error('invalid ciphertext'))
     const response = await POST(webhook())
     expect(response.status).toBe(500)
@@ -60,6 +59,12 @@ describe('webhook security', () => {
   it.each(['apiSecret', 'password'] as const)('rejects undecryptable %s', async field => {
     mocks.decrypt.mockRejectedValue(new Error('invalid'))
     await expect(resolveExchangeCredentials('bitget', { apiKey: 'test', [field]: 'raw' })).rejects.toThrow('Failed to decrypt')
+  })
+  it.each(['apiSecret', 'password'] as const)('rejects an empty decrypted %s', async field => {
+    mocks.decrypt.mockResolvedValue('')
+    await expect(resolveExchangeCredentials('bitget', { apiKey: 'test', [field]: 'encrypted' })).rejects.toThrow('Failed to decrypt')
+    expect(mocks.client).not.toHaveBeenCalled()
+    expect(mocks.order).not.toHaveBeenCalled()
   })
   it('rejects a bad secret without decryption or trading', async () => {
     const response = await POST(webhook('bad'))
