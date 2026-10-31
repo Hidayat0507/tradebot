@@ -1,7 +1,7 @@
+import { randomUUID } from 'crypto';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
-import { logger, normalizeError } from '@/lib/logging';
-import type { ExchangeClient, BalanceMap, CurrencyBalance, OrderResult } from '@/types/exchange';
+import type { ExchangeClient, OrderResult } from '@/types/exchange';
 
 export interface BotData {
   id: string;
@@ -10,388 +10,92 @@ export interface BotData {
   api_secret: string;
   user_id: string;
   webhook_secret: string;
-  order_size?: number; // Percentage of available balance to use (25, 50, 75, or 100)
+  pair: string;
+  order_size?: number;
+  max_position_size?: number;
+  mode?: 'paper' | 'live';
   name: string;
-  password?: string; // Bitget passphrase
+  password?: string;
 }
 
-/**
- * Execute direct amount trade
- */
-async function executeDirectAmountTrade(
-  exchange: ExchangeClient,
-  alert: TradingViewSignal,
-  price: number,
-  isHyperliquid: boolean
-): Promise<OrderResult> {
-  // Order type is limit only if price is provided in the alert
-  const orderType = alert.price ? 'limit' : 'market';
-  
-  logger.info('Using direct amount specified in alert', { 
-    amount: alert.amount,
-    symbol: alert.symbol,
-    action: alert.action,
-    type: orderType,
-    price: alert.price,
-    exchange: exchange.id
-  });
-  
-  const orderOptions = {
-    ...(alert.stoplossPercent ? {
-      stopLoss: {
-        stopPrice: price * (1 - alert.stoplossPercent/100),
-        type: 'market'
-      }
-    } : {}),
-    ...(isHyperliquid ? { slippage: 0.05 } : {})
-  };
-  
-  // For market orders: pass price for Hyperliquid and for BUY on exchanges like Bitget that require price
-  const orderPrice = orderType === 'limit'
-    ? alert.price
-    : (isHyperliquid || alert.action === 'buy' ? price : undefined);
-
-  return await exchange.createOrder(
-    alert.symbol,
-    orderType,
-    alert.action.toLowerCase(),
-    alert.amount ?? 0,
-    orderPrice,
-    orderOptions
-  );
+export function isPaperMode(bot: BotData): boolean {
+  return bot.mode === 'paper' || process.env.TRADING_MODE === 'paper' ||
+    (process.env.NODE_ENV === 'test' && process.env.TRADING_MODE !== 'live');
 }
 
-/**
- * Calculate trade amount based on available balance and percentage
- */
-async function calculateTradeAmount(
-  exchange: ExchangeClient,
-  alert: TradingViewSignal,
-  price: number,
-  bot: BotData
-): Promise<number> {
-  const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
-  
-  // Determine market type: swap symbols in CCXT usually contain ':' (e.g., BTC/USDT:USDT)
-  const isSwap = alert.symbol.includes(':');
-  const marketType = isSwap ? 'swap' : 'spot';
-  
-  // Determine currency for balance based on exchange and side
-  // - Hyperliquid BUY: USDC (quote). SELL: base (e.g., UETH)
-  // - Other exchanges BUY: quote (e.g., USDT). SELL: base (e.g., BTC)
-  let currency: string;
-  if (isHyperliquid) {
-    if (alert.action === 'buy') {
-      currency = 'USDC';
-    } else {
-      currency = alert.symbol.split('/')[0];
-    }
-  } else {
-    if (alert.action === 'buy') {
-      currency = alert.symbol.split('/')[1] || 'USDT';
-    } else {
-      currency = alert.symbol.split('/')[0];
+export function validateOrderSafety(alert: TradingViewSignal, bot: BotData): void {
+  if (!bot.pair || alert.symbol !== bot.pair) {
+    throw new ApiError('Alert symbol must match the configured bot pair', 400);
+  }
+  if (bot.max_position_size !== undefined &&
+    (!Number.isFinite(bot.max_position_size) || bot.max_position_size <= 0)) {
+    throw new ApiError('Invalid maximum position size in base currency', 400);
+  }
+  for (const size of [bot.order_size, alert.order_size]) {
+    if (size !== undefined && (!Number.isFinite(size) || size <= 0 || size > 100)) {
+      throw new ApiError('Order size must be greater than 0 and at most 100 percent', 400);
     }
   }
-  
-  logger.info('Starting balance calculation', {
-    action: alert.action,
-    currency,
-    isHyperliquid,
-    marketType,
-    symbol: alert.symbol,
-    exchangeId: exchange.id,
-    hasApiKey: !!exchange.apiKey,
-    hasWalletAddress: !!exchange.walletAddress,
-    options: exchange.options
-  });
-  
-  // Try to get balance following the same pattern as in bot-balance.tsx
-  let balance: BalanceMap;
-  try {
-    if (isHyperliquid) {
-      // For Hyperliquid, use correct market type and user parameters
-      logger.info('Fetching Hyperliquid balance', {
-        type: marketType,
-        user: bot.api_key,
-        currency
-      });
-      
-      balance = await exchange.fetchBalance({
-        type: marketType,  // 'spot' or 'swap' based on market type
-        user: bot.api_key  // Use apiKey as wallet address for Hyperliquid
-      });
-      
-      logger.info('Hyperliquid balance fetch result', {
-        hasBalance: !!balance[currency],
-        hasFree: balance[currency]?.free !== undefined,
-        balanceDetails: balance[currency],
-        allCurrencies: Object.keys(balance).filter(k => !k.startsWith('_') && k !== 'info')
-      });
-    } else {
-      // For other exchanges, try normal balance fetch
-      balance = await exchange.fetchBalance({
-        type: marketType
-      });
-    }
-    
-    // If currency not found, throw error
-    if (!balance[currency] || balance[currency]?.free === undefined) {
-      throw new Error(`Currency ${currency} not found in ${marketType} balance`);
-    }
-  } catch (err: unknown) {
-    const normalizedError = normalizeError(err)
-    logger.error('Failed to fetch balance', normalizedError, {
-      currency,
-      marketType,
-      exchange: exchange.id
-    })
-    throw new Error(`Failed to fetch ${currency} ${marketType} balance: ${normalizedError.message}`);
-  }
-  
-  // Get available balance
-  const currencyBalance = (balance[currency] as CurrencyBalance) ?? {}
-  const available = currencyBalance.free ?? 0;
-  
-  // Calculate order size percentage
-  const percentage = bot.order_size || 100; // Default to 100% if not specified
-  
-  logger.info('Starting amount calculation', {
-    availableBalance: available,
-    currency,
-    percentage,
-    price,
-    action: alert.action,
-    isHyperliquid,
-    balanceInfo: currencyBalance,
-    allBalances: Object.entries(balance)
-      .filter(([key]) => !['info', 'total', 'free', 'used'].includes(key))
-      .map(([key, entry]) => ({
-        currency: key,
-        balance: (entry as CurrencyBalance | undefined)?.free
-      }))
-  });
-  
-  // Calculate position size
-  const positionSize = (available * percentage) / 100;
-  logger.info('Calculated position size', {
-    positionSize,
-    currency,
-    calculation: `(${available} * ${percentage}) / 100`,
-    rawPositionSize: positionSize,
-    roundedPositionSize: Math.floor(positionSize * 100000) / 100000
-  });
-  
-  // For BUY orders, convert quote balance to base amount
-  let amount = positionSize;
-  if (alert.action === 'buy') {
-    amount = positionSize / price;
-    logger.info('Converted quote to base amount for BUY', {
-      positionSizeQuote: positionSize,
-      price,
-      calculation: `${positionSize} / ${price}`,
-      rawAmount: amount,
-      isHyperliquid
-    });
-
-    // Round down to 5 decimals for Hyperliquid; keep raw for others
-    if (isHyperliquid) {
-      amount = Math.floor(amount * 100000) / 100000;
-      logger.info('Rounded amount to 5 decimals (Hyperliquid)', {
-        roundedAmount: amount
-      });
-    }
-  }
-  
-  // Only use minimum value as fallback if amount is invalid
-  if (!amount || amount <= 0) {
-    logger.warn('Invalid amount calculated, using fallback minimum value', {
-      calculatedAmount: amount,
-      using: 'fallback minimum value'
-    });
-    
-    const minOrderValue = 10; // $10 minimum as fallback
-    amount = (minOrderValue * 1.1) / price;
-    
-    // Round down to 5 decimal places for Hyperliquid
-    if (isHyperliquid) {
-      amount = Math.floor(amount * 100000) / 100000;
-    }
-    
-    logger.info('Using fallback minimum amount', {
-      fallbackAmount: amount,
-      fallbackOrderValueUSD: amount * price
-    });
-  }
-  
-  // Log final calculation details
-  logger.info('Final trade amount calculation', {
-    initialBalance: available,
-    percentage,
-    positionSize,
-    price,
-    finalAmount: amount,
-    finalOrderValueUSD: amount * price
-  });
-  
-  if (!amount || amount <= 0) {
-    throw new Error('Invalid trade amount calculated: ' + amount);
-  }
-  
-  return amount;
 }
 
-/**
- * Execute real order
- */
-async function executeRealOrder(
-  exchange: ExchangeClient,
-  alert: TradingViewSignal,
-  amount: number,
-  price: number,
-  isHyperliquid: boolean
-): Promise<OrderResult> {
-  // Define the order type based on whether price is provided in the alert
-  const orderType = alert.price ? 'limit' : 'market';
-  
-  // For limit orders, use the alert price
-  // For market orders: pass price for Hyperliquid and for BUY on exchanges like Bitget that require price
-  const orderPrice = orderType === 'limit'
-    ? alert.price
-    : (isHyperliquid || alert.action === 'buy' ? price : undefined);
-  
-  logger.info('Creating order', { 
-    type: orderType, 
-    symbol: alert.symbol, 
-    action: alert.action,
-    amount: amount,
-    price: orderPrice, 
-    exchange: exchange.id
-  });
-  
-  const orderOptions = {
-    ...(alert.stoplossPercent ? {
-      stopLoss: {
-        stopPrice: price * (1 - alert.stoplossPercent/100),
-        type: 'market'
-      }
-    } : {}),
-    ...(isHyperliquid ? { slippage: 0.05 } : {})
-  };
-
-  // Add detailed logging of exact values and their types
-  logger.info('Order parameters detail', {
-    symbol: {
-      value: alert.symbol,
-      type: typeof alert.symbol
-    },
-    orderType: {
-      value: orderType,
-      type: typeof orderType
-    },
-    side: {
-      value: alert.action.toLowerCase(),
-      type: typeof alert.action
-    },
-    amount: {
-      value: amount,
-      type: typeof amount,
-      asString: amount.toString(),
-      asPreciseString: amount.toPrecision(10),
-      asFixedString: amount.toFixed(8)
-    },
-    price: {
-      value: orderPrice,
-      type: typeof orderPrice,
-      asString: orderPrice?.toString(),
-      asPreciseString: orderPrice?.toPrecision(10),
-      asFixedString: orderPrice?.toFixed(2)
-    },
-    options: {
-      value: orderOptions,
-      type: typeof orderOptions,
-      keys: Object.keys(orderOptions)
-    }
-  });
-  
-  // According to CCXT documentation:
-  // For limit orders: must provide symbol, 'limit', side, amount, price
-  // For market orders: must provide symbol, 'market', side, amount
-  const order = await exchange.createOrder(
-    alert.symbol,
-    orderType,
-    alert.action.toLowerCase(),
-    amount,
-    orderPrice,
-    orderOptions
-  );
-
-  logger.info('Order created successfully', {
-    orderId: order.id,
-    type: orderType,
-    symbol: alert.symbol,
-    action: alert.action,
-    requestedAmount: amount,
-    actualAmount: order.amount,
-    filledAmount: order.filled,
-    price: order.price || order.average,
-    status: order.status,
-    remaining: order.remaining,
-    exchange: exchange.id
-  });
-
-  return order;
-}
-
-/**
- * Execute trade based on webhook alert
- */
+/** Price is the independently fetched ticker price, never an alert price. */
 export async function executeTrade(
   exchange: ExchangeClient,
   alert: TradingViewSignal,
   price: number,
   bot: BotData
 ): Promise<{ order: OrderResult; calculatedAmount: number }> {
-  try {
-    const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
-
-    // For Hyperliquid, we need to set credentials correctly
-    if (isHyperliquid) {
-      // Set credentials in CCXT format
-      const existingOptions = (exchange.options ?? {}) as Record<string, unknown>
-      exchange.options = {
-        ...existingOptions,
-        apiKey: bot.api_key,         // Wallet address
-        secret: bot.api_secret,      // Private key
-        privateKey: bot.api_secret,  // Private key for signing
-        walletAddress: bot.api_key   // Required for order signing
-      }
-
-      const optionsRecord = exchange.options as Record<string, unknown>
-      logger.info('Set Hyperliquid credentials', {
-        walletAddress: bot.api_key,
-        hasPrivateKey: Boolean(optionsRecord.privateKey)
-      });
-    }
-
-    let calculatedAmount: number;
-
-    // If direct amount specified, use that
-    if (alert.amount && alert.amount > 0) {
-      calculatedAmount = alert.amount;
-      const order = await executeDirectAmountTrade(exchange, alert, price, isHyperliquid);
-      return { order, calculatedAmount };
-    }
-    
-    // Calculate amount based on balance and percentage
-    calculatedAmount = await calculateTradeAmount(exchange, alert, price, bot);
-    
-    // Execute real order
-    const order = await executeRealOrder(exchange, alert, calculatedAmount, price, isHyperliquid);
-    return { order, calculatedAmount };
-  } catch (error: unknown) {
-    const normalizedError = normalizeError(error)
-    logger.error('Failed to execute trade', normalizedError, { symbol: alert.symbol, action: alert.action })
-    throw new ApiError(`Failed to execute trade: ${normalizedError.message}`, 500);
+  validateOrderSafety(alert, bot);
+  if (!Number.isFinite(price) || price <= 0) throw new ApiError('Invalid ticker price', 400);
+  if (alert.price !== undefined && (!Number.isFinite(alert.price) || alert.price <= 0 ||
+    Math.abs(alert.price - price) / price > 0.02)) {
+    throw new ApiError('Alert price deviates more than 2% from ticker', 400);
   }
+  // USD caps require a USD quoted market; reject unsupported conversions rather than guessing.
+  const [base, quote] = bot.pair.split(':')[0].split('/');
+  if (!['USD', 'USDT', 'USDC'].includes(quote)) {
+    throw new ApiError('Order safety requires a USD quoted pair', 400);
+  }
+  const envCap = process.env.MAX_ORDER_NOTIONAL_USD === undefined
+    ? 100 : Number(process.env.MAX_ORDER_NOTIONAL_USD);
+  const cap = envCap;
+  if (!Number.isFinite(cap) || cap <= 0) throw new ApiError('Invalid max order notional USD', 400);
+  const percentage = Math.min(bot.order_size ?? 5, alert.order_size ?? 100);
+  const paper = isPaperMode(bot);
+  const currency = alert.action === 'buy' ? quote : base;
+  // Paper mode uses a simulated $1,000 portfolio and makes no private exchange calls.
+  const balance = paper ? undefined : await exchange.fetchBalance({
+    type: bot.pair.includes(':') ? 'swap' : 'spot',
+    ...(bot.exchange.toLowerCase() === 'hyperliquid' ? { user: bot.api_key } : {})
+  });
+  const available = paper ? (alert.action === 'buy' ? 1000 : 1000 / price)
+    : balance?.[currency]?.free;
+  if (available === undefined || !Number.isFinite(available) || available <= 0) {
+    throw new ApiError('No available balance for order', 400);
+  }
+  const executionPrice = alert.price ?? price;
+  const valuationPrice = Math.max(price, executionPrice);
+  const balanceAmount = available * percentage / 100 / (alert.action === 'buy' ? valuationPrice : 1);
+  if (alert.amount !== undefined && (!Number.isFinite(alert.amount) || alert.amount <= 0)) {
+    throw new ApiError('Invalid alert amount', 400);
+  }
+  // Limit buys are also bounded by their execution price.
+  const amount = Math.min(balanceAmount, cap / valuationPrice, bot.max_position_size ?? Infinity, alert.amount ?? Infinity);
+  if (!Number.isFinite(amount) || amount <= 0) throw new ApiError('Invalid order amount', 400);
+  if (paper) {
+    return { calculatedAmount: amount, order: {
+      id: `paper-${randomUUID()}`, amount, filled: amount, remaining: 0,
+      price: executionPrice, average: executionPrice, status: 'closed', paper: true
+    } };
+  }
+  const hyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
+  const order = await exchange.createOrder(bot.pair, alert.price === undefined ? 'market' : 'limit',
+    alert.action, amount, alert.price ?? (hyperliquid || alert.action === 'buy' ? price : undefined),
+    {
+      ...(alert.stoplossPercent ? { stopLoss: {
+        stopPrice: price * (1 - alert.stoplossPercent / 100), type: 'market'
+      } } : {}),
+      ...(hyperliquid ? { slippage: 0.01 } : {})
+    });
+  return { order, calculatedAmount: amount };
 }

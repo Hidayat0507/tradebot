@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const trimmedId = alert.bot_id.trim();
     const { data: bot, error } = await serviceClient
       .from('bots')
-      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size')
+      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, pair, max_position_size')
       .eq('id', trimmedId)
       .single();
     
@@ -86,14 +86,8 @@ export async function POST(request: NextRequest) {
 
     logger.info('Webhook secret verified, processing alert', { botId: bot.id });
 
-    // Use order_size from webhook or max_position_size from bot config
-    const botWithOrderSize = {
-      ...bot,
-      order_size: alert.order_size || bot.max_position_size || 100 // Use webhook order_size, fallback to max_position_size, then 100%
-    };
-
-    // Process the webhook alert
-    const trade = await processWebhookAlert(alert, botWithOrderSize, serviceClient);
+    // max_position_size is an absolute base-currency cap, not a percentage.
+    const trade = await processWebhookAlert(alert, bot, serviceClient);
 
     return successResponse({ success: true, trade });
   } catch (error) {

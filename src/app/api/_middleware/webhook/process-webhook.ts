@@ -2,12 +2,10 @@ import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { createExchangeClient, validateMarket } from '../exchange-middleware';
 import { logger, normalizeError } from '@/lib/logging';
-import { marketCache } from '@/lib/market-cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database/schema';
-import type { TickerResult } from '@/types/exchange';
 import { BotData } from './execute-trade';
-import { executeTrade } from './execute-trade';
+import { executeTrade, validateOrderSafety, isPaperMode } from './execute-trade';
 import { saveTrade } from './save-trade';
 
 /**
@@ -19,8 +17,9 @@ export async function processWebhookAlert(
   supabase: SupabaseClient<Database>
 ) {
   try {
+    validateOrderSafety(alert, bot);
     // Create exchange client with proper credentials
-    const exchange_client = await createExchangeClient(bot.exchange, {
+    const exchange_client = await createExchangeClient(bot.exchange, isPaperMode(bot) ? undefined : {
       apiKey: bot.api_key,
       apiSecret: bot.api_secret,
       password: bot.password
@@ -32,39 +31,12 @@ export async function processWebhookAlert(
       throw new ApiError(`Invalid market: ${alert.symbol}`, 400);
     }
     
-    // Try to get ticker from cache first
-    let ticker: TickerResult;
-    const cachedTicker = marketCache.get<TickerResult>(exchange_client.id, alert.symbol, 'ticker');
-    
-    if (cachedTicker) {
-      logger.info('Using cached ticker for trade price', { 
-        exchange: exchange_client.id, 
-        symbol: alert.symbol
-      });
-      ticker = cachedTicker;
-    } else {
-      // Fetch fresh ticker data
-      logger.info('Fetching fresh ticker for trade price', { 
-        exchange: exchange_client.id, 
-        symbol: alert.symbol
-      });
-      ticker = await exchange_client.fetchTicker(alert.symbol);
-      
-      // Cache the ticker for future use
-      marketCache.set(exchange_client.id, alert.symbol, 'ticker', ticker);
-    }
-    
-    if (!ticker.last) {
+    // Safety decisions require a fresh ticker, not a cached or alert supplied price.
+    const ticker = await exchange_client.fetchTicker(bot.pair);
+    const tradePrice = ticker.last;
+    if (tradePrice === undefined || !Number.isFinite(tradePrice) || tradePrice <= 0) {
       throw new ApiError('Could not determine trade price', 400);
     }
-
-    // Use the price from the alert if provided, otherwise use market price
-    const tradePrice = alert.price || ticker.last;
-    logger.info('Using price for trade', { 
-      price: tradePrice, 
-      source: alert.price ? 'alert' : 'market',
-      marketPrice: ticker.last
-    });
 
     // Execute trade
     const { order, calculatedAmount } = await executeTrade(exchange_client, alert, tradePrice, bot);
