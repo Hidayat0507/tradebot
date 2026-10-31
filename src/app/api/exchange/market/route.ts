@@ -6,10 +6,7 @@ import {
   successResponse,
   validateFields
 } from '@/app/api/_middleware/api-handler'
-import { 
-  createExchangeClient,
-  fetchMarketData
-} from '@/app/api/_middleware/exchange-middleware'
+import { publicMarketData } from '@/lib/public-market-data'
 import { logger, normalizeError } from '@/lib/logging'
 
 export async function GET(request: NextRequest) {
@@ -37,8 +34,7 @@ export async function GET(request: NextRequest) {
       .filter(bot => ['bitget'].includes(bot.exchange.toLowerCase()))
       .map(async (bot) => {
         try {
-          const exchange_client = await createExchangeClient(bot.exchange, undefined, 'market_data')
-          const marketData = await fetchMarketData(exchange_client, bot.pair)
+          const marketData = await publicMarketData.get(bot.exchange, bot.pair)
           
           return {
             bot_id: bot.id,
@@ -92,11 +88,8 @@ export async function POST(request: NextRequest) {
     
     logger.info('Market data request', { exchange, symbol })
     
-    // Create exchange client for public data (no credentials needed)
-    const exchange_client = await createExchangeClient('bitget', undefined, 'market_data')
-    
     try {
-      const marketData = await fetchMarketData(exchange_client, symbol)
+      const marketData = await publicMarketData.get('bitget', symbol)
       return successResponse(marketData)
     } catch (error) {
       // If it's a BadSymbol error, return a 200 response with error info

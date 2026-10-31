@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { mapSettledLimit } from '@/lib/concurrency'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -57,24 +58,17 @@ export default function MarketOverview() {
     async function fetchMarketData() {
       try {
         setIsLoading(true)
-        const promises = DEFAULT_SYMBOLS.map(async ({ exchange, symbol }) => {
+        // At most 2 requests in flight; the server also caches + caps upstream calls (Bitget 429s)
+        const results = await mapSettledLimit(DEFAULT_SYMBOLS, 2, async ({ exchange, symbol }) => {
           const response = await fetch('/api/exchange/market', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ exchange, symbol })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exchange, symbol }),
           })
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${symbol} data`)
-          }
-
+          if (!response.ok) throw new Error(`Failed to fetch ${symbol} data (${response.status})`)
           const data = await response.json()
-          return data.success ? data.data : null
+          return data.success && !data.data?.error ? (data.data as MarketData) : null
         })
-
-        const results = await Promise.allSettled(promises)
         
         const validData = results
           .filter((result): result is PromiseFulfilledResult<MarketData> => 
@@ -86,8 +80,16 @@ export default function MarketOverview() {
         // Take the top 6 symbols
         const top6MarketData = validData.slice(0, 6);
 
-        setMarketData(top6MarketData);
-        setError(null);
+        // Keep the last good rows if this round got nothing (e.g. transient rate limit)
+        if (top6MarketData.length > 0) {
+          setMarketData(top6MarketData)
+          setError(null)
+        } else {
+          setMarketData((prev) => {
+            if (prev.length === 0) setError('Market data temporarily unavailable')
+            return prev
+          })
+        }
       } catch (err) {
         setError('Failed to load market data')
         console.error(err)
@@ -97,7 +99,7 @@ export default function MarketOverview() {
     }
 
     fetchMarketData()
-    const intervalId = setInterval(fetchMarketData, 60000) // Refresh every minute
+    const intervalId = setInterval(() => { if (document.visibilityState === 'visible') fetchMarketData() }, 60000) // Refresh every minute
 
     return () => clearInterval(intervalId)
   }, [])
