@@ -47,7 +47,14 @@ describe('repo hygiene', () => {
   it('has a single npm lockfile', () => {
     expect(existsSync(path.join(root, 'package-lock.json'))).toBe(true)
     for (const f of ['bun.lockb', 'bun.lock', 'yarn.lock', 'pnpm-lock.yaml']) expect(existsSync(path.join(root, f))).toBe(false)
-    expect(JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).packageManager).toBeUndefined()
+    const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+    expect(pkg.packageManager).toBeUndefined()
+    expect(pkg.trustedDependencies).toBeUndefined()
+  })
+  it('docs do not tell people to use bun', () => {
+    for (const f of ['README.md', 'docs/ADMIN_PANEL_GUIDE.md', 'scripts/README-BITGET-TEST.md']) {
+      expect(readFileSync(path.join(root, f), 'utf8')).not.toMatch(/\bbun (run|install|scripts)/)
+    }
   })
   it('never redirects to the non-existent /auth/login', () => {
     const walk = (d: string): string[] => readdirSync(d).flatMap(f => {

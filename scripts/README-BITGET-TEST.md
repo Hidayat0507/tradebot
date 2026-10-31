@@ -20,12 +20,6 @@ TEST_BITGET_PASSWORD=your_bitget_passphrase
 npx tsx scripts/test-bitget-balance.ts
 ```
 
-Or with bun:
-
-```bash
-bun scripts/test-bitget-balance.ts
-```
-
 ## What the Test Does
 
 The script will test 4 different ways of fetching balance:

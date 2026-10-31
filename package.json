@@ -74,9 +74,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "trustedDependencies": [
-    "ccxt",
-    "unrs-resolver"
-  ]
+  "license": "ISC"
 }

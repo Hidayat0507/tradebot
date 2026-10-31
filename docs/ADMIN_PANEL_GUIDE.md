@@ -124,7 +124,7 @@ To change default limits for all users:
 
 2. Rebuild and deploy:
    ```bash
-   bun run build
+   npm run build
    vercel --prod
    ```
 
