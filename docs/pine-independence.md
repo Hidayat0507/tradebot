@@ -140,7 +140,7 @@ signals to a hand-written reference on 3 candle sets). Run against a real provid
 `npx tsx scripts/pine-ai-eval.ts` (exit 1 below 80%). CI uses mocked models only.
 
 ### CI
-`.github/workflows/ci.yml`: lint, tsc, unit tests, `npm run test:db` (PGlite), build with dummy public env.
+Proposed `docs/ci/ci.yml` (copy to `.github/workflows/ci.yml`; bot token lacks `workflow` scope): lint, tsc, unit tests, `npm run test:db` (PGlite), build with dummy public env.
 
 ### signals.bot_id fix
 `20261031000400_signals_bot_id_uuid.sql` — **confirm hosted `bots.id` type before applying.**
