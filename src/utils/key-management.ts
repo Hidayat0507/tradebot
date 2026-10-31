@@ -10,28 +10,6 @@ interface ExchangeCredentials {
 }
 
 /**
- * Get credential from environment variable
- */
-function getEnvCredential(exchange: SupportedExchange, type: 'key' | 'secret'): string | null {
-  const exchangeUpper = exchange.toUpperCase()
-  const typeUpper = type.toUpperCase()
-  
-  // Check for exchange-specific env var (e.g., BINANCE_API_KEY)
-  const specificVar = process.env[`${exchangeUpper}_API_${typeUpper}`]
-  if (specificVar) {
-    return specificVar
-  }
-  
-  // Check for generic env var (e.g., API_KEY)
-  const genericVar = process.env[`API_${typeUpper}`]
-  if (genericVar) {
-    return genericVar
-  }
-  
-  return null
-}
-
-/**
  * Get bot credentials from database with security check
  */
 export async function getBotCredentials(
@@ -79,39 +57,14 @@ export async function getBotCredentials(
   }
 }
 
-/**
- * Get exchange credentials from environment variables or database
- * Priority: 
- * 1. Environment variables (if available)
- * 2. Bot-specific credentials from database
- */
+/** Resolve only authenticated, bot-owned credentials. */
 export async function getExchangeCredentials(
   request: NextRequest,
   exchange: SupportedExchange,
   botId?: string
 ): Promise<ExchangeCredentials> {
-  // First try to get from environment variables
-  const envApiKey = getEnvCredential(exchange, 'key')
-  const envApiSecret = getEnvCredential(exchange, 'secret')
-  
-  // If both environment variables are available, use them
-  if (envApiKey && envApiSecret) {
-    return {
-      apiKey: envApiKey,
-      apiSecret: envApiSecret,
-      exchange
-    }
-  }
-  
-  // If no botId provided, return what we have from env (may be incomplete)
-  if (!botId) {
-    return {
-      apiKey: envApiKey || '',
-      apiSecret: envApiSecret || '',
-      exchange
-    }
-  }
-  
-  // If botId is provided, get from database with security check
-  return getBotCredentials(request, botId)
+  if (!botId) throw new Error('Bot ID is required for exchange credentials')
+  const credentials = await getBotCredentials(request, botId)
+  if (credentials.exchange !== exchange) throw new Error('Bot exchange mismatch')
+  return credentials
 }

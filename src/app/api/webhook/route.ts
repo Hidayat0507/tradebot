@@ -1,3 +1,4 @@
+import { rateLimiter, requestIp, rateLimitResponse } from '@/lib/rate-limit';
 import { NextRequest } from 'next/server';
 import { createHash, timingSafeEqual } from 'crypto';
 export const runtime = 'nodejs';
@@ -15,9 +16,12 @@ import { logger, normalizeError } from '@/lib/logging';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!await rateLimiter.consume(`webhook:ip:${requestIp(request)}`, 60, 60000)) return rateLimitResponse();
     // Parse and validate the alert (avoid logging raw payload)
     const data = await request.json();
     const alert = validateWebhookAlert(data);
+
+    if (!await rateLimiter.consume(`webhook:bot:${alert.bot_id.trim()}`, 30, 60000)) return rateLimitResponse();
 
     // Log the incoming request for debugging
     logger.debug('Validated webhook alert', {
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
     } catch {
       validSecret = false;
     }
-    if (!validSecret) {
+    if (!stored || !provided || !validSecret) {
       logger.warn('Invalid webhook secret');
       throw new ApiError('Invalid webhook secret', 401);
     }
