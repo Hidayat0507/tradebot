@@ -4,6 +4,9 @@ import ConditionalNavigation from "@/components/ConditionalNavigation"
 import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toaster"
 
+// Pages create Supabase clients from runtime env; don't prerender at build time.
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: "Trading Bot",
   description: "TradingView to Crypto Exchange Bot",
