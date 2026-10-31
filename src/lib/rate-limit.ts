@@ -13,7 +13,12 @@ export class MemoryRateLimiter implements RateLimiter {
       if (entry.expires <= now) this.entries.delete(id)
     }
     const entry = this.entries.get(key) ?? { count: 0, expires: now + windowMs }
-    if (entry.count >= limit || (!this.entries.has(key) && this.entries.size >= 10000)) return false
+    if (entry.count >= limit) return false
+    // Bounded memory: evict the oldest window instead of rejecting every new key.
+    if (!this.entries.has(key) && this.entries.size >= 10000) {
+      const oldest = this.entries.keys().next().value
+      if (oldest !== undefined) this.entries.delete(oldest)
+    }
     entry.count++
     this.entries.set(key, entry)
     return true

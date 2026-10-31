@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
     const data = await request.json();
     const alert = validateWebhookAlert(data);
 
-    if (!await rateLimiter.consume(`webhook:bot:${alert.bot_id.trim()}`, 30, 60000)) return rateLimitResponse();
 
     // Log the incoming request for debugging
     logger.debug('Validated webhook alert', {
@@ -86,6 +85,9 @@ export async function POST(request: NextRequest) {
       logger.warn('Invalid webhook secret');
       throw new ApiError('Invalid webhook secret', 401);
     }
+
+    // Per-bot budget only after auth, so a caller without the secret cannot starve a bot.
+    if (!await rateLimiter.consume(`webhook:bot:${bot.id}`, 30, 60000)) return rateLimitResponse();
 
     logger.info('Webhook secret verified, processing alert', { botId: bot.id });
 

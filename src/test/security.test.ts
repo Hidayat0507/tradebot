@@ -83,13 +83,25 @@ describe('webhook security', () => {
   it('returns 429 per bot even across different IPs', async () => {
     const id = 'limited-bot'
     for (let n = 0; n < 30; n++) await rateLimiter.consume(`webhook:bot:${id}`, 30, 60000)
+    mocks.single.mockResolvedValue({ data: { ...bot, id }, error: null })
     expect((await POST(webhook('correct', id))).status).toBe(429)
-    expect(mocks.single).not.toHaveBeenCalled()
+    expect(mocks.order).not.toHaveBeenCalled()
+  })
+  it('does not spend the per-bot budget on bad secrets', async () => {
+    const id = 'starved-bot'
+    mocks.single.mockResolvedValue({ data: { ...bot, id }, error: null })
+    for (let n = 0; n < 40; n++) expect((await POST(webhook('bad', id))).status).toBe(401)
+    expect((await POST(webhook('correct', id))).status).toBe(200)
   })
   it('returns 429 per IP before parsing or database access', async () => {
     for (let n = 0; n < 60; n++) await rateLimiter.consume('webhook:ip:limited-ip', 60, 60000)
     expect((await POST(webhook('correct', 'other', 'limited-ip'))).status).toBe(429)
     expect(mocks.single).not.toHaveBeenCalled()
+  })
+  it('evicts old keys instead of rejecting new ones when full', async () => {
+    const limiter = new MemoryRateLimiter()
+    for (let n = 0; n < 10001; n++) await limiter.consume(`k${n}`, 1, 60000)
+    expect(await limiter.consume('fresh', 1, 60000)).toBe(true)
   })
   it('expires limiter windows', async () => {
     const limiter = new MemoryRateLimiter()
