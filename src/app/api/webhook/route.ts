@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const trimmedId = alert.bot_id.trim();
     const { data: bot, error } = await serviceClient
       .from('bots')
-      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size')
+      .select('id, mode, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size')
       .eq('id', trimmedId)
       .single();
     

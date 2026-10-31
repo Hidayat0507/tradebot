@@ -4,6 +4,7 @@ import { logger, normalizeError } from '@/lib/logging';
 import type { ExchangeClient, BalanceMap, CurrencyBalance, OrderResult } from '@/types/exchange';
 
 export interface BotData {
+  mode?: 'paper' | 'live';
   id: string;
   exchange: string;
   api_key: string;

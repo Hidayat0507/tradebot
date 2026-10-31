@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server'
 // note: using request-scoped Supabase from getAuthenticatedUser
 import { encrypt } from '@/utils/encryption';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, randomUUID } from 'crypto';
+import { validateExchangeCredentials } from '@/app/api/_middleware/exchange';
+import { getExchangePlugin } from '@/lib/exchanges/registry';
+import type { SupportedExchange } from '@/lib/database/schema';
 import type { Database } from '@/lib/database/schema'
 import {
   getAuthenticatedUser,
@@ -55,7 +58,11 @@ export async function POST(request: NextRequest) {
           throw countError
         }
 
-        if (typeof count === 'number' && count >= limit) {
+        if (typeof count !== 'number') {
+          throw new Error('Bot count unavailable')
+        }
+
+        if (count >= limit) {
           throw new ApiError(`Bot limit reached for your current plan (max ${limit})`, 403)
         }
       }
@@ -70,6 +77,28 @@ export async function POST(request: NextRequest) {
     }
 
     validateBotData(payload);
+    const exchange = payload.exchange.toLowerCase() as SupportedExchange
+    const mode = payload.mode ?? 'live'
+    if (mode !== 'live' && mode !== 'paper') {
+      throw new ApiError('Invalid trading mode', 400)
+    }
+    const credentials: Record<string, unknown> = {
+      apiKey: payload.api_key, apiSecret: payload.api_secret, password: payload.password,
+    }
+    const missing = getExchangePlugin(exchange).requiredCredentials.filter(
+      (key) => typeof credentials[key] !== 'string' || !(credentials[key] as string).trim()
+    )
+    if (missing.length) {
+      throw new ApiError(`Missing required credential(s): ${missing.join(', ')}`, 400)
+    }
+    if (mode !== 'paper' && process.env.TRADING_MODE !== 'paper') {
+      try {
+        await validateExchangeCredentials(exchange, payload.api_key, payload.api_secret || '', payload.password)
+      } catch {
+        // Exchange errors may include credentials; never log or return their raw text.
+        throw new ApiError('Unable to validate exchange credentials', 400)
+      }
+    }
 
     // Generate webhook secret (plaintext shown only in UI after creation) and hash for storage
     const webhookSecret = randomBytes(32).toString('hex')
@@ -89,9 +118,11 @@ export async function POST(request: NextRequest) {
 
     // Prepare botData without password to satisfy TypeScript
     const botData: BotInsert = {
+      id: randomUUID(),
       user_id: user.id,
       name: payload.name,
-      exchange: payload.exchange,
+      exchange,
+      mode,
       pair: payload.pair,
       max_position_size: payload.max_position_size || 0.01,
       stoploss_percentage: payload.stoploss_percentage,
@@ -119,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Bot created successfully', { botId: bot.id, userId: user.id });
-    return successResponse(bot, 201);
+    return successResponse({ id: bot.id, webhookSecret }, 201);
   } catch (error) {
     return handleApiError(error);
   }

@@ -36,52 +36,6 @@ const TRADING_PAIRS = [
   'AAVE/USDT',
 ] as const
 
-const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'))
-
-function getWebCrypto(): Crypto {
-  const crypto = typeof globalThis !== 'undefined'
-    ? (globalThis.crypto || (globalThis as unknown as { msCrypto?: Crypto }).msCrypto)
-    : undefined
-
-  if (!crypto || typeof crypto.getRandomValues !== 'function') {
-    throw new Error('Secure random number generation is not supported in this environment')
-  }
-
-  return crypto
-}
-
-function bytesToHex(bytes: Uint8Array, uppercase = false) {
-  const hex = Array.from(bytes, (byte) => BYTE_TO_HEX[byte]).join('')
-  return uppercase ? hex.toUpperCase() : hex
-}
-
-function generateClientBotId() {
-  const crypto = getWebCrypto()
-  const bytes = new Uint8Array(4)
-  crypto.getRandomValues(bytes)
-  return bytesToHex(bytes, true)
-}
-
-async function generateWebhookSecret() {
-  const crypto = getWebCrypto()
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  const plain = bytesToHex(bytes)
-
-  if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
-    throw new Error('Secure hashing is not supported in this environment')
-  }
-
-  const encoded = new TextEncoder().encode(plain)
-  const digest = await crypto.subtle.digest('SHA-256', encoded)
-  const hashHex = bytesToHex(new Uint8Array(digest))
-
-  return {
-    plain,
-    hashed: `sha256:${hashHex}`,
-  }
-}
-
 const createBotFormSchema = z.object({
   name: z.string().min(3, 'Bot name must be at least 3 characters'),
   exchange: z.enum(['hyperliquid', 'bitget'] as const),
@@ -105,8 +59,6 @@ export function CreateBotForm() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
-  const [validationError, setValidationError] = useState<string | null>(null)
-  const [validationSuccess, setValidationSuccess] = useState<string | null>(null)
   const [showApiSecret, setShowApiSecret] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [botLimit, setBotLimit] = useState<number | null>(null)
@@ -172,112 +124,25 @@ export function CreateBotForm() {
       setIsSubmitting(true)
       setError(null)
       setSuccess(null)
-      setValidationError(null)
-      setValidationSuccess(null)
       setGeneratedWebhookSecret(null)
       setSecretCopyStatus(null)
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError) throw new Error('Authentication failed: Please log in again')
-      if (!user) {
-        alert('User is not logged in. Redirecting to login.')
-        router.push('/auth/login')
-        return
-      }
-
-      const userId = user.id
-
-      if (!userId) {
-        alert('User is not logged in. Redirecting to login.')
-        router.push('/auth/login')
-        return
-      }
-
-      if (botLimit !== null && currentBotCount >= botLimit) {
-        setError(`You have reached the ${botLimit} bot limit for the ${plan} plan.`)
-        setIsSubmitting(false)
-        return
-      }
-
-      // Generate a unique ID for the bot
-      const botId = generateClientBotId()
-
-      // Generate a webhook secret
-      const { plain: webhookSecretPlaintext, hashed: webhookSecretHash } = await generateWebhookSecret()
-
-      // Step 1: Create the bot first with placeholder values
-      const { error: botError } = await supabase
-        .from('bots')
-        .insert({
-          id: botId,
-          user_id: userId,
-          name: values.name,
-          exchange: values.exchange,
-          pair: values.pair, // keep CCXT symbol format with slash
-          max_position_size: values.max_position_size,
-          stoploss_percentage: values.stoploss_percentage,
-          enabled: false,
-          // Add placeholder values that will be replaced after validation
-          api_key: 'pending_validation',
-          api_secret: 'pending_validation',
-          webhook_secret: webhookSecretHash, // Store hashed secret immediately
-        })
-        .select()
-        .single()
-
-      if (botError) {
-        throw new Error(`Failed to create bot: ${botError.message}`)
-      }
-
-      // Step 2: Validate exchange credentials
-      const requestBody = {
-        botId: botId,
-        exchange: values.exchange,
-        apiKey: values.api_key,
-        apiSecret: values.api_secret,
-        password: values.exchange === 'bitget' ? values.password : undefined,
-      }
-      console.log('Sending request to validate API:', requestBody)
-
-      const response = await fetch('/api/exchange/validate', {
+      const response = await fetch('/api/bots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ ...values, enabled: false }),
       })
-
-      console.log('Response status:', response.status)
-      
-      try {
-        const data = await response.json()
-        console.log('Response data:', data)
-
-        if (!response.ok) {
-          // If validation fails, delete the bot we just created
-          await supabase.from('bots').delete().eq('id', botId)
-          
-          setValidationError(data.error || 'Failed to validate exchange credentials')
-          setValidationSuccess(null)
-          setIsSubmitting(false)
-          return
-        }
-
-        setValidationSuccess('Exchange credentials validated successfully!')
-        setValidationError(null)
-        setSuccess('Bot created successfully! Copy your webhook secret below before leaving this page.')
-        setGeneratedWebhookSecret(webhookSecretPlaintext)
-        setSecretCopyStatus(null)
-      } catch (error: any) {
-        // If something goes wrong, delete the bot we just created
-        await supabase.from('bots').delete().eq('id', botId)
-        
-        console.error('Error validating credentials:', error)
-        setError(error.message || 'An unexpected error occurred')
-      } finally {
-        setIsSubmitting(false)
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        if (response.status === 401) router.push('/auth/login')
+        throw new Error(result.error || 'Failed to create bot')
       }
-    } catch (error: any) {
-      console.error('Error creating bot:', error)
-      setError(error.message || 'An unexpected error occurred')
+
+      setSuccess('Bot created successfully! Copy your webhook secret below before leaving this page.')
+      setGeneratedWebhookSecret(result.data.webhookSecret)
+      setCurrentBotCount((count) => count + 1)
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred')
     } finally {
       setIsSubmitting(false)
     }
@@ -327,22 +192,6 @@ export function CreateBotForm() {
           </AlertDescription>
         </Alert>
       ) : null}
-
-      {validationError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Validation Error</AlertTitle>
-          <AlertDescription>{validationError}</AlertDescription>
-        </Alert>
-      )}
-
-      {validationSuccess && (
-        <Alert className="mb-4 border-green-500 text-green-500">
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Validation Success</AlertTitle>
-          <AlertDescription>{validationSuccess}</AlertDescription>
-        </Alert>
-      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

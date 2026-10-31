@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { createExchangeClient, validateMarket } from '../exchange-middleware';
@@ -19,6 +20,19 @@ export async function processWebhookAlert(
   supabase: SupabaseClient<Database>
 ) {
   try {
+    if (process.env.TRADING_MODE === 'paper' || bot.mode === 'paper') {
+      const price = alert.price;
+      const amount = alert.amount;
+      if (!price || !amount || !Number.isFinite(price) || !Number.isFinite(amount) || price <= 0 || amount <= 0) {
+        throw new ApiError('Paper trades require a positive price and amount', 400);
+      }
+      const order = {
+        id: `paper-${randomUUID()}`, status: 'closed',
+        amount, price, average: price, filled: amount, remaining: 0,
+      };
+      return await saveTrade(supabase, bot.user_id, bot.id, order, alert, price, amount);
+    }
+
     // Create exchange client with proper credentials
     const exchange_client = await createExchangeClient(bot.exchange, {
       apiKey: bot.api_key,

@@ -45,15 +45,9 @@ function buildResolvedCredentials(
   return credentials
 }
 
-export async function validateAndStoreCredentials(
-  request: NextRequest,
-  botId: string,
-  apiKey: string,
-  apiSecret: string,
-  exchange: SupportedExchange,
-  password?: string
-): Promise<{ success: boolean; message: string }> {
-  try {
+export async function validateExchangeCredentials(
+  exchange: SupportedExchange, apiKey: string, apiSecret: string, password?: string
+): Promise<void> {
     const plugin = getExchangePlugin(exchange)
 
     const providedCreds: Partial<Record<string, string | undefined>> = {
@@ -75,6 +69,19 @@ export async function validateAndStoreCredentials(
 
     const balanceParams = plugin.getBalanceParams?.(resolved, { context: 'credential_validation' })
     await client.fetchBalance(balanceParams)
+
+}
+
+export async function validateAndStoreCredentials(
+  request: NextRequest,
+  botId: string,
+  apiKey: string,
+  apiSecret: string,
+  exchange: SupportedExchange,
+  password?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    await validateExchangeCredentials(exchange, apiKey, apiSecret, password)
 
     let encryptedSecret: string | null = null
     if (apiSecret) {

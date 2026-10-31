@@ -20,6 +20,7 @@ export interface Database {
           user_id: string
           name: string
           exchange: string
+          mode?: 'live' | 'paper'
           pair: string
           max_position_size: number
           stoploss_percentage?: number
@@ -36,6 +37,7 @@ export interface Database {
           user_id: string
           name: string
           exchange: string
+          mode?: 'live' | 'paper'
           pair: string
           max_position_size: number
           stoploss_percentage?: number
@@ -52,6 +54,7 @@ export interface Database {
           user_id?: string
           name?: string
           exchange?: string
+          mode?: 'live' | 'paper'
           pair?: string
           max_position_size?: number
           stoploss_percentage?: number

@@ -21,10 +21,11 @@ export function isAdminUser(user: Pick<User, 'email'>) {
 
 type Supabase = SupabaseClient<any>
 
-export async function fetchSubscriptionRecord(supabase: Supabase) {
+export async function fetchSubscriptionRecord(supabase: Supabase, userId: string) {
   const { data, error } = await supabase
     .from('user_subscriptions')
     .select('*')
+    .eq('user_id', userId)
     .maybeSingle()
 
   if (error) {
@@ -52,7 +53,7 @@ export async function resolveBotLimit(
     }
   }
 
-  const subscription = await fetchSubscriptionRecord(supabase)
+  const subscription = await fetchSubscriptionRecord(supabase, user.id)
 
   if (!subscription) {
     return {
