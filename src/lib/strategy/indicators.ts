@@ -59,6 +59,23 @@ export function rsi(src: number[], len: number): number[] {
   })
 }
 
+export function atr(high: number[], low: number[], close: number[], len: number): number[] {
+  const tr = high.map((h, i) =>
+    i === 0 ? h - low[i] : Math.max(h - low[i], Math.abs(h - close[i - 1]), Math.abs(low[i] - close[i - 1])))
+  return rma(tr, len)
+}
+
+export function macd(src: number[], fast: number, slow: number, signal: number) {
+  const f = ema(src, fast), s = ema(src, slow)
+  const line = f.map((v, i) => v - s[i])
+  const sig = ema(line, signal)
+  return { line, signal: sig, hist: line.map((v, i) => v - sig[i]) }
+}
+
+export function shift(src: number[], offset: number): number[] {
+  return src.map((_, i) => (i - offset >= 0 ? src[i - offset] : NaN))
+}
+
 export function crossover(a: number[], b: number[]): number[] {
   return a.map((v, i) =>
     i > 0 && v > b[i] && a[i - 1] <= b[i - 1] ? 1 : 0)

@@ -1,4 +1,4 @@
-import { BIN_OPS, FUNCS, LIMITS, SOURCES, type Expr, type StrategyDefinition } from './types'
+import { BIN_OPS, FUNCS, FUNC_ARITY, LIMITS, SOURCES, type Expr, type Rule, type StrategyDefinition } from './types'
 
 export class StrategyValidationError extends Error {}
 
@@ -38,6 +38,9 @@ export function validateDefinition(input: unknown): StrategyDefinition {
       case 'ref':
         if (typeof x.name !== 'string' || !known.has(x.name)) fail(`unknown reference ${String(x.name)}`)
         return { type: 'ref', name: x.name as string }
+      case 'hist':
+        if (!Number.isInteger(x.offset) || (x.offset as number) < 0 || (x.offset as number) > LIMITS.maxLength) fail('history offset must be an integer 0..' + LIMITS.maxLength)
+        return { type: 'hist', arg: checkExpr(x.arg), offset: x.offset as number }
       case 'not':
       case 'neg':
         return { type: x.type, arg: checkExpr(x.arg) }
@@ -46,12 +49,16 @@ export function validateDefinition(input: unknown): StrategyDefinition {
         return { type: 'bin', op: x.op as never, left: checkExpr(x.left), right: checkExpr(x.right) }
       case 'call': {
         if (!FUNCS.includes(x.fn as never)) fail(`unknown function ${String(x.fn)}`)
-        if (!Array.isArray(x.args) || x.args.length !== 2) fail(`${String(x.fn)} takes 2 arguments`)
+        const arity = FUNC_ARITY[x.fn as keyof typeof FUNC_ARITY]
+        if (!Array.isArray(x.args) || x.args.length !== arity) fail(`${String(x.fn)} takes ${arity} arguments`)
         const args = (x.args as unknown[]).map(checkExpr)
-        if (x.fn === 'sma' || x.fn === 'ema' || x.fn === 'rsi') {
-          const len = constValue(args[1], inputs)
-          if (len === undefined || !Number.isInteger(len) || len < 1 || len > LIMITS.maxLength)
-            fail(`${String(x.fn)} length must be a constant integer 1..${LIMITS.maxLength}`)
+        if (x.fn !== 'crossover' && x.fn !== 'crossunder') {
+          const lens = x.fn === 'atr' ? args : args.slice(1)
+          for (const a of lens) {
+            const len = constValue(a, inputs)
+            if (len === undefined || !Number.isInteger(len) || len < 1 || len > LIMITS.maxLength)
+              fail(`${String(x.fn)} length must be a constant integer 1..${LIMITS.maxLength}`)
+          }
         }
         return { type: 'call', fn: x.fn as never, args }
       }
@@ -71,14 +78,25 @@ export function validateDefinition(input: unknown): StrategyDefinition {
   if (!Array.isArray(d.rules) || d.rules.length === 0) fail('at least one rule required')
   const rules = (d.rules as unknown[]).map((r) => {
     const o = r as Record<string, unknown>
-    if (!['entry', 'close', 'close_all'].includes(o?.action as string)) fail('bad rule action')
+    if (!['entry', 'close', 'close_all', 'exit'].includes(o?.action as string)) fail('bad rule action')
     if (typeof o.id !== 'string' || o.id.length > 64) fail('bad rule id')
     if (o.action === 'entry' && o.direction !== 'long' && o.direction !== 'short') fail('entry needs direction')
+    if (o.action === 'exit') {
+      if (!o.stop && !o.limit) fail('exit needs stop or limit')
+      if (o.fromEntry !== undefined && (typeof o.fromEntry !== 'string' || o.fromEntry.length > 64)) fail('bad fromEntry')
+    }
     return {
-      action: o.action as 'entry' | 'close' | 'close_all',
+      action: o.action as Rule['action'],
       id: o.id as string,
       ...(o.action === 'entry' ? { direction: o.direction as 'long' | 'short' } : {}),
       when: checkExpr(o.when),
+      ...(o.action === 'exit'
+        ? {
+            ...(o.fromEntry !== undefined ? { fromEntry: o.fromEntry as string } : {}),
+            ...(o.stop ? { stop: checkExpr(o.stop) } : {}),
+            ...(o.limit ? { limit: checkExpr(o.limit) } : {}),
+          }
+        : {}),
     }
   })
   return { version: 1, name, inputs, vars, rules }

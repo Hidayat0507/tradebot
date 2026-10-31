@@ -50,7 +50,15 @@ class P {
   unary(): Expr {
     if (this.peek('not')) { this.next(); return { type: 'not', arg: this.unary() } }
     if (this.peek('-')) { this.next(); return { type: 'neg', arg: this.unary() } }
-    return this.primary()
+    let e = this.primary()
+    while (this.peek('[')) {
+      this.next()
+      const n = this.next()
+      if (n.k !== 'num' || !/^\d+$/.test(n.v)) this.err('history offset must be an integer literal')
+      this.eat(']')
+      e = { type: 'hist', arg: e, offset: Number(n.v) }
+    }
+    return e
   }
   primary(): Expr {
     const x = this.next()
@@ -60,12 +68,11 @@ class P {
     if (x.v === 'true' || x.v === 'false') return { type: 'bool', value: x.v === 'true' }
     if (this.peek('(')) {
       const fn = x.v.replace(/^ta\./, '')
-      if (!x.v.startsWith('ta.') || !['sma', 'ema', 'rsi', 'crossover', 'crossunder'].includes(fn))
-        this.err(`unsupported function ${x.v}`)
+      if (!x.v.startsWith('ta.') || !['sma', 'ema', 'rsi', 'crossover', 'crossunder', 'atr'].includes(fn))
+        this.err(`unsupported function ${x.v}${x.v === 'ta.macd' ? ' (use [m, s, h] = ta.macd(...))' : ''}`)
       const args = this.args().pos
       return { type: 'call', fn: fn as never, args }
     }
-    if (this.peek('[')) this.err('history reference [] not supported')
     if ((SOURCES as readonly string[]).includes(x.v)) return { type: 'src', name: x.v as never }
     if (x.v.includes('.')) this.err(`unsupported identifier ${x.v}`)
     return { type: 'ref', name: x.v }
@@ -142,6 +149,12 @@ export function parsePine(source: string): StrategyDefinition {
       } else if (head.v === 'strategy.close') {
         if (!id) p.err('strategy.close(id) expected')
         rules.push({ action: 'close', id: id!, when })
+      } else if (head.v === 'strategy.exit') {
+        if (!id) p.err('strategy.exit(id, from_entry, stop=, limit=) expected')
+        for (const k of Object.keys(a.named)) if (!['stop', 'limit', 'when'].includes(k)) p.err(`strategy.exit ${k}= not supported (use stop/limit prices)`)
+        if (!a.named.stop && !a.named.limit) p.err('strategy.exit needs stop= or limit=')
+        const from = a.raw[1]?.[0]?.k === 'str' ? a.raw[1][0].v : undefined
+        rules.push({ action: 'exit', id: id!, when, ...(from ? { fromEntry: from } : {}), ...(a.named.stop ? { stop: a.named.stop } : {}), ...(a.named.limit ? { limit: a.named.limit } : {}) })
       } else if (head.v === 'strategy.close_all') {
         rules.push({ action: 'close_all', id: '*', when })
       } else p.err(`unsupported call ${head.v}`)
@@ -149,6 +162,27 @@ export function parsePine(source: string): StrategyDefinition {
     }
     if (block) throw new PineParseError('only strategy.entry/close allowed inside if', ln)
     if (head.v === 'var' || toks.some((t) => t.v === ':=')) throw new PineParseError('var / := not supported', ln)
+    if (head.v === '[') {
+      // [macdLine, signalLine, hist] = ta.macd(src, fast, slow, signal)
+      const names: string[] = []
+      p.next()
+      for (;;) {
+        const t = p.next()
+        if (t.k !== 'id' || t.v.includes('.')) p.err('expected identifier in tuple')
+        names.push(t.v)
+        if (p.peek(']')) { p.next(); break }
+        p.eat(',')
+      }
+      p.eat('=')
+      if (p.next().v !== 'ta.macd') p.err('tuple assignment only supported for ta.macd')
+      const a = p.args()
+      if (!p.done()) p.err('trailing tokens')
+      if (a.pos.length !== 4 || Object.keys(a.named).length) p.err('ta.macd(src, fast, slow, signal) expected')
+      if (names.length !== 3) p.err('ta.macd returns 3 values')
+      const fns = ['macd', 'macd_signal', 'macd_hist'] as const
+      names.forEach((n, k) => { if (n !== '_') vars.push({ name: n, expr: { type: 'call', fn: fns[k], args: a.pos } }) })
+      return
+    }
     if (head.k === 'id' && toks[1]?.v === '=') {
       p.next(); p.next()
       const varName = head.v

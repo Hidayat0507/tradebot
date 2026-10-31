@@ -42,9 +42,14 @@ backtest. UI: `/strategy` (paste → preview → backtest).
 - Inputs: `x = input(10)`, `input.int(10, ...)`, `input.float(...)`.
 - Sources: `open high low close volume`, `hl2`, `hlc3`.
 - `ta.sma(src, len)`, `ta.ema(src, len)`, `ta.rsi(src, len)`,
-  `ta.crossover(a, b)`, `ta.crossunder(a, b)`. Lengths must be constant/input.
+  `ta.crossover(a, b)`, `ta.crossunder(a, b)`, `ta.atr(len)`,
+  `[m, s, h] = ta.macd(src, fast, slow, signal)` (tuple; `_` to skip). Lengths must be constant/input.
+- History references `x[n]` with integer literal `n` (phase 2).
 - Operators: `+ - * /`, comparisons, `and or not`, parentheses, `true/false`.
-- Variable assignment `name = expr` (`var` / `:=` / history `[]` not supported).
+- Variable assignment `name = expr` (`var` / `:=` not supported).
+- `strategy.exit(id, from_entry, stop=price, limit=price [, when=])` – price levels only
+  (`profit=`/`loss=` ticks and trailing not supported). Placed at bar close, active next bar;
+  if stop and limit both hit in one bar the stop wins (conservative); gaps fill at open.
 - `strategy.entry(id, strategy.long|strategy.short [, when=cond])`,
   `strategy.close(id [, when=cond])`, `strategy.close_all()`.
 - `if cond` followed by indented entry/close lines (one level).

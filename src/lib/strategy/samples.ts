@@ -26,4 +26,14 @@ if trendUp and not (close < open)
 if close < basis
     strategy.entry("Short", strategy.short)
 `,
+  macdAtrStops: `//@version=5
+strategy("MACD + ATR stops")
+[m, sig, hist] = ta.macd(close, 12, 26, 9)
+a = ta.atr(14)
+if ta.crossover(m, sig) and hist[1] < 0
+    strategy.entry("Long", strategy.long)
+strategy.exit("XL", "Long", stop = close - 2 * a, limit = close + 3 * a)
+if ta.crossunder(m, sig)
+    strategy.close("Long")
+`,
 } as const

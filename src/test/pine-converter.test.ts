@@ -34,7 +34,6 @@ describe('pine parser', () => {
   })
   it.each([
     ['ta.macd', 'strategy("x")\nm = ta.macd(close, 12, 26, 9)\nstrategy.entry("L", strategy.long)'],
-    ['history', 'strategy("x")\nc = close[1]\nstrategy.entry("L", strategy.long)'],
     ['var', 'strategy("x")\nvar x = 1\nstrategy.entry("L", strategy.long)'],
     ['indicator', 'indicator("x")'],
     ['no strategy', 'x = 1'],

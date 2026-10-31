@@ -30,10 +30,17 @@ export function evaluate(definition: StrategyDefinition, candles: Candle[]): Sig
       case 'ref': return env.get(e.name)!
       case 'neg': return ev(e.arg).map((v) => -v)
       case 'not': return ev(e.arg).map((v) => (truthy(v) ? 0 : 1))
+      case 'hist': return ta.shift(ev(e.arg), e.offset)
       case 'call': {
+        const c = (k: number) => constValue(e.args[k], def.inputs)!
+        if (e.fn === 'atr') return ta.atr(src.high, src.low, src.close, c(0))
         const a = ev(e.args[0])
         if (e.fn === 'crossover' || e.fn === 'crossunder') return ta[e.fn](a, ev(e.args[1]))
-        return ta[e.fn](a, constValue(e.args[1], def.inputs)!)
+        if (e.fn === 'macd' || e.fn === 'macd_signal' || e.fn === 'macd_hist') {
+          const m = ta.macd(a, c(1), c(2), c(3))
+          return e.fn === 'macd' ? m.line : e.fn === 'macd_signal' ? m.signal : m.hist
+        }
+        return ta[e.fn](a, c(1))
       }
       case 'bin': {
         const l = ev(e.left), r = ev(e.right)
@@ -43,12 +50,21 @@ export function evaluate(definition: StrategyDefinition, candles: Candle[]): Sig
   }
   for (const v of def.vars) env.set(v.name, ev(v.expr))
   const conds = def.rules.map((r) => ev(r.when))
+  const stops = def.rules.map((r) => (r.stop ? ev(r.stop) : undefined))
+  const limits = def.rules.map((r) => (r.limit ? ev(r.limit) : undefined))
   const signals: Signal[] = []
   for (let i = 0; i < n; i++) {
     def.rules.forEach((r, k) => {
-      if (truthy(conds[k][i])) {
-        signals.push({ index: i, time: candles[i].time, action: r.action, id: r.id, direction: r.direction, price: candles[i].close })
+      if (!truthy(conds[k][i])) return
+      const s: Signal = { index: i, time: candles[i].time, action: r.action, id: r.id, direction: r.direction, price: candles[i].close }
+      if (r.action === 'exit') {
+        const stop = stops[k]?.[i], limit = limits[k]?.[i]
+        if (r.fromEntry !== undefined) s.fromEntry = r.fromEntry
+        if (stop !== undefined && Number.isFinite(stop)) s.stop = stop
+        if (limit !== undefined && Number.isFinite(limit)) s.limit = limit
+        if (s.stop === undefined && s.limit === undefined) return
       }
+      signals.push(s)
     })
   }
   return signals
