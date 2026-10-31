@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from "next/navigation"
 import { createClient } from '@/utils/supabase/client'
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { WebhookSecretSection } from '@/components/bot/WebhookSecretSection';
 import { WebhookExample } from '@/components/bot/WebhookExample'

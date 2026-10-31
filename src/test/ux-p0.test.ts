@@ -71,3 +71,22 @@ describe('#4 mode helpers', () => {
     expect(isPaperTradeId('123')).toBe(false)
   })
 })
+
+import { splitByMode } from '@/lib/pnl-split'
+describe('#4 dashboard PnL split', () => {
+  const now = Date.parse('2026-10-31T12:00:00Z')
+  const t = (pnl: number | null, h: number, extra: object = {}) => ({ pnl, timestamp: new Date(now - h * 3_600_000).toISOString(), ...extra })
+  it('live and paper never mix; simulated counts as paper; 24h window', () => {
+    const s = splitByMode([t(10, 1), t(-4, 2), t(100, 1, { paper: true }), t(7, 3, { simulated: true }), t(50, 30), t(null, 1)], now)
+    expect(s.live).toEqual({ pnl24h: 6, pnlAll: 56, trades: 4 })
+    expect(s.paper).toEqual({ pnl24h: 107, pnlAll: 107, trades: 2 })
+  })
+  it('dashboard headline uses the split and live-only positions/insights', () => {
+    const d = src('src/app/dashboard/page.tsx')
+    expect(d).toMatch(/Live P&L \(24h\)/)
+    expect(d).toMatch(/Paper P&L \(24h\)/)
+    expect(d).toMatch(/<ActivePositions trades=\{split\.liveTrades\} \/>/)
+    expect(d).toMatch(/<TradingInsights trades=\{split\.liveTrades\} \/>/)
+    expect(d).not.toMatch(/24h Profit\/Loss/)
+  })
+})

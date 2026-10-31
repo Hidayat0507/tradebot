@@ -33,8 +33,8 @@ export default function PaperStrategies() {
     <Card className="bg-white/70 dark:bg-gray-800/70 rounded-2xl shadow-lg">
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
-          <CardTitle className="text-xl font-semibold">Pine strategies (paper)</CardTitle>
-          <CardDescription>In-app strategy status, paper trades and paper PnL. No real orders.</CardDescription>
+          <CardTitle className="text-xl font-semibold">Paper trading</CardTitle>
+          <CardDescription>Simulated only — no real orders. Pine strategy status, paper trades and paper P&L.</CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
       </CardHeader>
