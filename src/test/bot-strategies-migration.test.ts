@@ -22,4 +22,9 @@ describe('bot_strategies migration (static checks; not applied)', () => {
     expect(sql).toMatch(/check \(mode = 'paper'\)/)
     expect(sql).toMatch(/bot_id uuid not null unique/)
   })
+  it('cursor and mode are not user-writable (column grants, no table-level update)', () => {
+    expect(sql).toMatch(/revoke insert, update on public\.bot_strategies from authenticated/)
+    const upd = sql.match(/grant update \(([^)]+)\)/)![1]
+    expect(upd).not.toMatch(/last_candle_time|mode|user_id|bot_id/)
+  })
 })

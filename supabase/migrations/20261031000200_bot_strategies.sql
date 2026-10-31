@@ -44,9 +44,16 @@ create policy "bot_strategies_update_own" on public.bot_strategies
 create policy "bot_strategies_delete_own" on public.bot_strategies
   for delete to authenticated using (user_id = (select auth.uid()));
 
--- Scheduler progress is server-owned: users cannot move the cursor.
-revoke update (last_candle_time) on public.bot_strategies from authenticated, anon;
+-- Column-level grants: a table-level UPDATE grant would override a column revoke, so revoke
+-- table-level and grant only user-editable columns. mode, user_id, bot_id and the scheduler
+-- cursor (last_candle_time) stay server-owned.
 revoke all on public.bot_strategies from anon;
+revoke insert, update on public.bot_strategies from authenticated;
+grant select, delete on public.bot_strategies to authenticated;
+grant insert (bot_id, user_id, name, pine_source, definition, converter, timeframe, paper_quote_size, enabled)
+  on public.bot_strategies to authenticated;
+grant update (name, pine_source, definition, converter, timeframe, paper_quote_size, enabled)
+  on public.bot_strategies to authenticated;
 
 create or replace function public.bot_strategies_touch_updated_at()
 returns trigger language plpgsql set search_path = '' as $$
