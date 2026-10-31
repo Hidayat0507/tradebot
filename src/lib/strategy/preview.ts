@@ -34,7 +34,7 @@ export interface PreviewDeps {
 /** Convert + backtest. Paper only: never places orders, never touches DB or private APIs. */
 export async function runPreview(input: unknown, deps: PreviewDeps = {}) {
   const body = previewSchema.parse(input)
-  const conv = await convertPine(body.pine, deps.ai)
+  const conv = await convertPine(body.pine, deps.ai ?? (await import('./ai-converter')).getAiConverter())
   if (!conv.ok) return { ok: false as const, error: conv.error }
   let candles: Candle[]
   let source: string

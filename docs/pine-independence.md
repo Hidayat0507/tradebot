@@ -122,3 +122,25 @@ explicit per-bot opt-in plus the existing order caps — out of scope for this P
   (base tables are not in this repo's migrations).
 - Known issue found: `20261031000000_webhook_signals.sql` declares `signals.bot_id text` referencing
   `bots.id` — if `bots.id` is `uuid` (as in the RLS PR #8) the FK fails. Needs a follow-up migration.
+
+## Phase 5 (feat/pine-phase5)
+### AI converter (server flag, off by default)
+| env | meaning |
+|---|---|
+| `PINE_AI_CONVERTER=on` | enable (any other value = off) |
+| `PINE_AI_API_KEY` | provider key — env only, never logged or returned |
+| `PINE_AI_BASE_URL` | OpenAI-compatible base URL (default `https://api.openai.com/v1`) |
+| `PINE_AI_MODEL` | default `gpt-4o-mini` |
+| `PINE_AI_TIMEOUT_MS` | default 20000, max 60000 |
+
+Only called when the deterministic parser fails. Output → `parseAiJson` → `validateDefinition`
+(same closed AST as the parser); preview/save show a "Review carefully" warning and store `converter='ai'`.
+Eval set: `src/lib/strategy/ai-eval/cases.ts` (5 convertible + 3 must-reject cases; pass = identical
+signals to a hand-written reference on 3 candle sets). Run against a real provider manually with
+`npx tsx scripts/pine-ai-eval.ts` (exit 1 below 80%). CI uses mocked models only.
+
+### CI
+Proposed `docs/ci/ci.yml` (copy to `.github/workflows/ci.yml`; bot token lacks `workflow` scope): lint, tsc, unit tests, `npm run test:db` (PGlite), build with dummy public env.
+
+### signals.bot_id fix
+`20261031000400_signals_bot_id_uuid.sql` — **confirm hosted `bots.id` type before applying.**
