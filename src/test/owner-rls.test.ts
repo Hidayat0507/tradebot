@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const sql = readFileSync(resolve('supabase/migrations/20261031000000_owner_rls.sql'), 'utf8')
+const sql = readFileSync(resolve('supabase/migrations/20261031000500_owner_rls.sql'), 'utf8')
   .replace(/--[^\n]*/g, '').replace(/\s+/g, ' ').toLowerCase()
 const statements = sql.split(';').map(s => s.trim())
 

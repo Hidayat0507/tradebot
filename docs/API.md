@@ -39,6 +39,8 @@ All requests to the webhook API must include the bot's webhook secret for authen
 | `bot_id` | string | Your bot's unique identifier |
 | `symbol` | string | Trading pair in exchange format (e.g., "BTC/USDC:USDC" for Hyperliquid) |
 | `action` | string | Must be "buy" or "sell" (case-insensitive) |
+| `ts` | string or number | ISO timestamp (`{{timenow}}`) or Unix seconds, within 60 seconds of server time |
+| `alert_id` | string | Unique per bot and event; reuse on retries |
 | `secret` | string | Your webhook secret for authentication |
 
 ### Trade Size Parameters
@@ -64,6 +66,8 @@ You must specify one of the following parameters to determine the size of your t
 
 ```json
 {
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "1F3D1863",
   "symbol": "BTC/USDC:USDC",
   "action": "BUY",
@@ -76,6 +80,8 @@ You must specify one of the following parameters to determine the size of your t
 
 ```json
 {
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "1F3D1863",
   "symbol": "BTC/USDC:USDC",
   "action": "SELL",
@@ -88,6 +94,8 @@ You must specify one of the following parameters to determine the size of your t
 
 ```json
 {
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "1F3D1863",
   "symbol": "BTC/USDC:USDC",
   "action": "BUY",
@@ -100,6 +108,8 @@ You must specify one of the following parameters to determine the size of your t
 
 ```json
 {
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "1F3D1863",
   "symbol": "ETH/USDC:USDC",
   "action": "BUY",
@@ -121,7 +131,9 @@ You must specify one of the following parameters to determine the size of your t
   "trade": {
     "id": "123456",
     "user_id": "user_123",
-    "bot_id": "1F3D1863",
+    "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
+  "bot_id": "1F3D1863",
     "external_id": "exchange_order_id_123",
     "symbol": "BTC/USDC:USDC",
     "side": "buy",
@@ -207,6 +219,8 @@ GET /api/webhook/status
 
 ```json
 {
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "YOUR_BOT_ID",
   "symbol": "{{ticker}}",
   "action": "{{strategy.order.action}}",
@@ -250,3 +264,18 @@ This means that multiple trades executed within these time windows will use the 
 7. **Check Status Endpoint**: Verify if the server is in simulation mode before executing important trades
 
 
+
+### Replay protection and paper execution
+
+Set `WEBHOOK_REPLAY_WINDOW_SECONDS` to configure the allowed timestamp distance
+(default 60 seconds, including future timestamps). Repeated `(bot_id, alert_id)`
+returns 409. Claims remain consumed after execution or persistence failures;
+reconcile uncertain orders before sending a new event ID. Apply the signals migration
+before enabling this endpoint. Only the service role can access signal claims.
+
+Set `TRADING_MODE=paper` to simulate fills without exchange calls. Tests default to
+paper mode. Paper alerts require an explicit positive `price` and `amount` and
+persist a trade with a `paper-` external ID. Setting the persisted `bots.mode` to `paper` also
+selects simulation, even when `TRADING_MODE=live`. Apply the bot trading mode
+migration before using this endpoint; existing bots default to `live`. For strategies that can emit multiple identical orders in one
+second, generate a distinct event nonce instead of the example composed alert ID.

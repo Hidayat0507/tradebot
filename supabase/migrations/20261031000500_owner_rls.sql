@@ -44,6 +44,11 @@ create table if not exists public.logs (
   created_at timestamptz not null default now()
 );
 
+-- Older hosted tables may predate these columns; the grants below name them explicitly.
+alter table public.bots add column if not exists stoploss_percentage numeric;
+alter table public.bots add column if not exists password text;
+alter table public.bots add column if not exists updated_at timestamptz not null default now();
+
 alter table public.bots enable row level security;
 alter table public.trades enable row level security;
 alter table public.logs enable row level security;

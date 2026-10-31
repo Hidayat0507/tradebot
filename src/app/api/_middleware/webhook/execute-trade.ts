@@ -1,16 +1,17 @@
+import { createHash } from 'crypto';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { logger, normalizeError } from '@/lib/logging';
 import type { ExchangeClient, BalanceMap, CurrencyBalance, OrderResult } from '@/types/exchange';
 
 export interface BotData {
+  mode?: string;
   id: string;
   exchange: string;
   api_key: string;
   api_secret: string;
   user_id: string;
   webhook_secret: string;
-  mode?: 'paper' | 'live';
   order_size?: number; // Percentage of available balance to use (25, 50, 75, or 100)
   name: string;
   password?: string; // Bitget passphrase
@@ -23,7 +24,8 @@ async function executeDirectAmountTrade(
   exchange: ExchangeClient,
   alert: TradingViewSignal,
   price: number,
-  isHyperliquid: boolean
+  isHyperliquid: boolean,
+  clientOrderId: string
 ): Promise<OrderResult> {
   // Order type is limit only if price is provided in the alert
   const orderType = alert.price ? 'limit' : 'market';
@@ -38,6 +40,7 @@ async function executeDirectAmountTrade(
   });
   
   const orderOptions = {
+    clientOrderId,
     ...(alert.stoplossPercent ? {
       stopLoss: {
         stopPrice: price * (1 - alert.stoplossPercent/100),
@@ -250,7 +253,8 @@ async function executeRealOrder(
   alert: TradingViewSignal,
   amount: number,
   price: number,
-  isHyperliquid: boolean
+  isHyperliquid: boolean,
+  clientOrderId: string
 ): Promise<OrderResult> {
   // Define the order type based on whether price is provided in the alert
   const orderType = alert.price ? 'limit' : 'market';
@@ -271,6 +275,7 @@ async function executeRealOrder(
   });
   
   const orderOptions = {
+    clientOrderId,
     ...(alert.stoplossPercent ? {
       stopLoss: {
         stopPrice: price * (1 - alert.stoplossPercent/100),
@@ -354,22 +359,19 @@ export async function executeTrade(
   bot: BotData
 ): Promise<{ order: OrderResult; calculatedAmount: number }> {
   try {
-    if (bot.mode === 'paper' || process.env.TRADING_MODE === 'paper') {
-      // Paper fills use explicit inputs only; never fetch live balances or prices.
+    if (isPaperMode(bot)) {
       const amount = alert.amount;
       if (!amount || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(price) || price <= 0) {
-        throw new Error('Paper trading requires a positive amount and price');
+        throw new ApiError('Paper mode requires a positive amount and price', 400);
       }
-      return {
-        calculatedAmount: amount,
-        order: {
-          id: `paper-${crypto.randomUUID()}`,
-          symbol: alert.symbol, side: alert.action, amount, price,
-          average: price, filled: amount, remaining: 0, status: 'closed',
-        },
-      };
+      return { calculatedAmount: amount, order: {
+        id: `paper-${signalClientOrderId(bot.id, alert.alert_id, bot.exchange)}`,
+        amount, price, average: price, filled: amount, remaining: 0, status: 'closed',
+        paper: true,
+      } };
     }
     const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
+    const clientOrderId = signalClientOrderId(bot.id, alert.alert_id, bot.exchange);
 
     // For Hyperliquid, we need to set credentials correctly
     if (isHyperliquid) {
@@ -395,7 +397,7 @@ export async function executeTrade(
     // If direct amount specified, use that
     if (alert.amount && alert.amount > 0) {
       calculatedAmount = alert.amount;
-      const order = await executeDirectAmountTrade(exchange, alert, price, isHyperliquid);
+      const order = await executeDirectAmountTrade(exchange, alert, price, isHyperliquid, clientOrderId);
       return { order, calculatedAmount };
     }
     
@@ -403,11 +405,24 @@ export async function executeTrade(
     calculatedAmount = await calculateTradeAmount(exchange, alert, price, bot);
     
     // Execute real order
-    const order = await executeRealOrder(exchange, alert, calculatedAmount, price, isHyperliquid);
+    const order = await executeRealOrder(exchange, alert, calculatedAmount, price, isHyperliquid, clientOrderId);
     return { order, calculatedAmount };
   } catch (error: unknown) {
     const normalizedError = normalizeError(error)
     logger.error('Failed to execute trade', normalizedError, { symbol: alert.symbol, action: alert.action })
+    if (error instanceof ApiError) throw error;
     throw new ApiError(`Failed to execute trade: ${normalizedError.message}`, 500);
   }
+}
+
+// Both installed CCXT adapters accept params.clientOrderId. Hyperliquid requires
+// a 128-bit hex string with 0x prefix; Bitget maps the unified key to clientOid.
+export function signalClientOrderId(botId: string, alertId: string | undefined, exchange: string): string {
+  if (!alertId) throw new ApiError('Missing alert_id', 400);
+  const hex = createHash('sha256').update(JSON.stringify([botId, alertId])).digest('hex').slice(0, 32);
+  return exchange.toLowerCase() === 'hyperliquid' ? `0x${hex}` : hex;
+}
+
+export function isPaperMode(bot: BotData): boolean {
+  return bot.mode === 'paper' || process.env.TRADING_MODE === 'paper';
 }

@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database/schema';
 import type { TickerResult } from '@/types/exchange';
 import { BotData } from './execute-trade';
-import { executeTrade } from './execute-trade';
+import { executeTrade, isPaperMode } from './execute-trade';
 import { saveTrade } from './save-trade';
 
 /**
@@ -19,6 +19,13 @@ export async function processWebhookAlert(
   supabase: SupabaseClient<Database>
 ) {
   try {
+    if (isPaperMode(bot)) {
+      // No client construction, market lookup, balance fetch, or external price feed.
+      const { order, calculatedAmount } = await executeTrade(
+        {} as Parameters<typeof executeTrade>[0], alert, alert.price ?? 0, bot
+      );
+      return await saveTrade(supabase, bot.user_id, bot.id, order, alert, alert.price!, calculatedAmount);
+    }
     // Create exchange client with proper credentials
     const exchange_client = await createExchangeClient(bot.exchange, {
       apiKey: bot.api_key,
