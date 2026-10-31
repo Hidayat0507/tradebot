@@ -10,7 +10,7 @@ import {
   validateWebhookAlert,
   processWebhookAlert
 } from '@/app/api/_middleware/webhook';
-import { createClient, createServiceClient } from '@/utils/supabase/server';
+import { createServiceClient } from '@/utils/supabase/server';
 import { logger, normalizeError } from '@/lib/logging';
 
 export async function POST(request: NextRequest) {
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
     });
 
     // Initialize Supabase clients
-    const _supabase = await createClient(request);
     const serviceClient = createServiceClient();
 
     // Minimal log before database query
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest) {
     const trimmedId = alert.bot_id.trim();
     const { data: bot, error } = await serviceClient
       .from('bots')
-      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, pair, max_position_size')
+      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, pair, max_position_size, mode')
       .eq('id', trimmedId)
       .single();
     
@@ -85,6 +84,16 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Webhook secret verified, processing alert', { botId: bot.id });
+
+    // Claim durably before any exchange work. Never release a claim after failure:
+    // the exchange may have accepted an order even if its response was lost.
+    const { error: signalError } = await serviceClient.from('signals').insert({
+      bot_id: bot.id,
+      alert_id: alert.alert_id!,
+      ts: alert.ts!,
+    });
+    if (signalError?.code === '23505') throw new ApiError('Duplicate alert', 409);
+    if (signalError) throw new ApiError('Failed to record signal', 500);
 
     // max_position_size is an absolute base-currency cap, not a percentage.
     const trade = await processWebhookAlert(alert, bot, serviceClient);

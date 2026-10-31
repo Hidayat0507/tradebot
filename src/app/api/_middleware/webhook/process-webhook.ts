@@ -17,9 +17,18 @@ export async function processWebhookAlert(
   supabase: SupabaseClient<Database>
 ) {
   try {
+    if (isPaperMode(bot)) {
+      // No client construction, market lookup, balance fetch, or external price feed.
+      const { order, calculatedAmount } = await executeTrade(
+        {} as Parameters<typeof executeTrade>[0], alert, alert.price ?? 0, bot
+      );
+      return await saveTrade(supabase, bot.user_id, bot.id, order, alert, alert.price!, calculatedAmount);
+    }
+
     validateOrderSafety(alert, bot);
+
     // Create exchange client with proper credentials
-    const exchange_client = await createExchangeClient(bot.exchange, isPaperMode(bot) ? undefined : {
+    const exchange_client = await createExchangeClient(bot.exchange, {
       apiKey: bot.api_key,
       apiSecret: bot.api_secret,
       password: bot.password
@@ -30,7 +39,7 @@ export async function processWebhookAlert(
     if (!isValidMarket) {
       throw new ApiError(`Invalid market: ${alert.symbol}`, 400);
     }
-    
+
     // Safety decisions require a fresh ticker, not a cached or alert supplied price.
     const ticker = await exchange_client.fetchTicker(bot.pair);
     const tradePrice = ticker.last;

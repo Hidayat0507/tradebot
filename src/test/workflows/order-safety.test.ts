@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/webhook/route';
 import { createClient } from '@supabase/supabase-js';
 import { processWebhookAlert } from '@/app/api/_middleware/webhook/process-webhook';
-import type { BotData } from '@/app/api/_middleware/webhook/execute-trade';
+import { signalClientOrderId, type BotData } from '@/app/api/_middleware/webhook/execute-trade';
 import type { TradingViewSignal } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -29,7 +29,9 @@ vi.mock('@/utils/supabase/server', () => ({
 
 const bot: BotData = { id: 'bot', name: 'test', user_id: 'user', exchange: 'bitget',
   api_key: 'fake', api_secret: 'fake', webhook_secret: 'fake', pair: 'BTC/USDT' };
-const signal: TradingViewSignal = { bot_id: 'bot', symbol: 'BTC/USDT', action: 'buy' };
+const signal: TradingViewSignal = {
+  bot_id: 'bot', symbol: 'BTC/USDT', action: 'buy', ts: new Date().toISOString(), alert_id: 'evt-1',
+};
 const run = (alert = signal, config = bot) => processWebhookAlert(alert, config, createClient('http://localhost', 'fake'));
 
 describe('webhook server order safety', () => {
@@ -63,7 +65,8 @@ describe('webhook server order safety', () => {
   });
   it('uses a small 5% default size', async () => {
     await run();
-    expect(mocks.createOrder.mock.calls[0]).toEqual(['BTC/USDT', 'market', 'buy', 0.5, 100, {}]);
+    expect(mocks.createOrder.mock.calls[0]).toEqual(['BTC/USDT', 'market', 'buy', 0.5, 100,
+      { clientOrderId: signalClientOrderId(bot.id, signal.alert_id, bot.exchange) }]);
   });
   it('rejects the wrong pair before accessing an exchange', async () => {
     await expect(run({ ...signal, symbol: 'ETH/USDT' })).rejects.toThrow('configured bot pair');
@@ -90,9 +93,9 @@ describe('webhook server order safety', () => {
     await run({ ...signal, amount: 999 }, { ...bot, order_size: 100 });
     expect(mocks.createOrder.mock.calls[0][3]).toBe(1);
   });
-  it('defaults to paper mode in tests', async () => {
-    vi.stubEnv('TRADING_MODE', undefined);
-    await run();
+  it('defaults to paper mode when TRADING_MODE is paper', async () => {
+    vi.stubEnv('TRADING_MODE', 'paper');
+    await run({ ...signal, amount: 0.5, price: 100 });
     expect(mocks.createOrder).not.toHaveBeenCalled();
     expect(mocks.fetchBalance).not.toHaveBeenCalled();
   });
@@ -108,7 +111,7 @@ describe('webhook server order safety', () => {
   });
   it.each(['bot', 'env'])('simulates paper fills via %s without private exchange calls', async mode => {
     if (mode === 'env') vi.stubEnv('TRADING_MODE', 'paper');
-    await run(signal, mode === 'bot' ? { ...bot, mode: 'paper' } : bot);
+    await run({ ...signal, amount: 0.5, price: 100 }, mode === 'bot' ? { ...bot, mode: 'paper' } : bot);
     expect(mocks.fetchBalance).not.toHaveBeenCalled();
     expect(mocks.createOrder).not.toHaveBeenCalled();
     expect(mocks.insert.mock.calls[0][0].external_id).toMatch(/^paper-/);
@@ -149,7 +152,8 @@ describe('webhook server order safety', () => {
     mocks.fetchBalance.mockResolvedValue({ BTC: { free: 2 }, USDT: { free: 999999 } });
     expect((await post({ ...signal, action: 'sell' })).status).toBe(200);
     expect(mocks.createOrder.mock.calls[0][3]).toBe(0.1);
-    expect(mocks.insert.mock.calls[0][0].size).toBe(0.1);
+    // insert call 0 is the signals claim; call 1 is the trade save.
+    expect(mocks.insert.mock.calls[1][0].size).toBe(0.1);
   });
   it.each([0, -1, Infinity, NaN])('rejects invalid absolute cap %s', async cap => {
     await expect(run(signal, { ...bot, max_position_size: cap })).rejects.toThrow('base currency');
