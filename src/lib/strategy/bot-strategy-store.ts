@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { convertPine } from './converter'
+import { convertPine, type AiConverter } from './converter'
+import { getAiConverter } from './ai-converter'
 import { TIMEFRAMES } from './exchanges'
 import { LIMITS } from './types'
 
@@ -22,11 +23,11 @@ const COLUMNS = 'bot_id, name, pine_source, definition, converter, timeframe, pa
  * Converts Pine server-side (the client's definition is never trusted) and saves it for a bot.
  * Uses the caller's user-scoped client so RLS + column grants apply. Paper only.
  */
-export async function saveBotStrategy(supabase: SupabaseClient, userId: string, botId: string, input: unknown): Promise<SaveStrategyResult> {
+export async function saveBotStrategy(supabase: SupabaseClient, userId: string, botId: string, input: unknown, ai: AiConverter = getAiConverter()): Promise<SaveStrategyResult> {
   const parsed = saveStrategySchema.safeParse(input)
   if (!parsed.success) return { ok: false, status: 400, error: 'Invalid request' }
   const body = parsed.data
-  const conv = await convertPine(body.pine)
+  const conv = await convertPine(body.pine, ai)
   if (!conv.ok) return { ok: false, status: 422, error: conv.error }
   const fields = {
     name: conv.definition.name,
