@@ -78,6 +78,5 @@
   "trustedDependencies": [
     "ccxt",
     "unrs-resolver"
-  ],
-  "packageManager": "bun@1.1.10"
+  ]
 }

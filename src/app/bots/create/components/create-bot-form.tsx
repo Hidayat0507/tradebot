@@ -181,7 +181,7 @@ export function CreateBotForm() {
       if (authError) throw new Error('Authentication failed: Please log in again')
       if (!user) {
         alert('User is not logged in. Redirecting to login.')
-        router.push('/auth/login')
+        router.push('/auth')
         return
       }
 
@@ -189,7 +189,7 @@ export function CreateBotForm() {
 
       if (!userId) {
         alert('User is not logged in. Redirecting to login.')
-        router.push('/auth/login')
+        router.push('/auth')
         return
       }
 

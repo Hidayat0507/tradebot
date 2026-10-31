@@ -5,6 +5,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OrderResult } from '@/types/exchange';
 import type { Database } from '@/lib/database/schema';
 
+export function mapOrderStatus(status?: string): string {
+  switch (status) {
+    case 'open': return 'open';
+    case 'closed': return 'filled';
+    case 'canceled':
+    case 'expired': return 'cancelled';
+    case 'rejected': return 'failed';
+    default: return 'pending';
+  }
+}
+
 /**
  * Save trade to database
  */
@@ -18,9 +29,11 @@ export async function saveTrade(
   calculatedAmount?: number  // Add calculated amount as backup
 ) {
   type TradeSummary = Pick<Database['public']['Tables']['trades']['Row'], 'price' | 'size'>
+  const size = order.filled ?? order.amount ?? calculatedAmount ?? 0;
+  const executionPrice = order.average ?? order.price ?? price;
   let pnl = null;
   // If this is a sell order, calculate PnL from the most recent buy trade
-  if (alert.action.toLowerCase() === 'sell') {
+  if (alert.action.toLowerCase() === 'sell' && size > 0) {
     // Fetch the most recent buy trade for this bot and symbol
     const { data: lastBuyTrade, error: fetchError } = await supabase
       .from('trades')
@@ -33,9 +46,9 @@ export async function saveTrade(
       .maybeSingle();
     if (!fetchError && lastBuyTrade && typeof lastBuyTrade.price === 'number') {
       // Calculate PnL: (Sell Price - Buy Price) * Sell Size
-      const sellPrice = order.price || order.average || price;
+      const sellPrice = executionPrice;
       const buyPrice = lastBuyTrade.price;
-      const sellSize = order.amount ?? calculatedAmount ?? 0;
+      const sellSize = size;
       pnl = (sellPrice - buyPrice) * sellSize;
     }
   }
@@ -46,9 +59,9 @@ export async function saveTrade(
     bot_id: botId,
     symbol: alert.symbol,
     side: alert.action.toLowerCase(),
-    status: 'filled',
-    size: order.amount ?? calculatedAmount ?? 0,  // Use calculated amount as fallback
-    price: order.price || order.average || price,
+    status: mapOrderStatus(order.status),
+    size,
+    price: executionPrice,
     pnl: pnl
   };
 
