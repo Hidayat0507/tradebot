@@ -1,5 +1,6 @@
 'use client'
 
+import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import {
   Table,
@@ -86,9 +87,10 @@ export default function LogsTable({ logs, isLoading, onRefresh }: LogsTableProps
           size="sm"
           onClick={onRefresh}
           disabled={isLoading}
-          className="h-10 w-10"
+          className="h-10 w-10 shrink-0"
+          aria-label="Refresh logs"
         >
-          <RefreshCcw className="h-4 w-4" />
+          <RefreshCcw className="h-4 w-4" aria-hidden />
         </Button>
       </div>
 
@@ -113,7 +115,7 @@ export default function LogsTable({ logs, isLoading, onRefresh }: LogsTableProps
               filteredLogs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="font-mono">
-                    {new Date(log.timestamp).toLocaleString()}
+                    {formatDateTime(log.timestamp)}
                   </TableCell>
                   <TableCell>{log.botName}</TableCell>
                   <TableCell>
