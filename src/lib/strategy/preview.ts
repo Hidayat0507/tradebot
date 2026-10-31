@@ -50,7 +50,6 @@ export async function runPreview(input: unknown, deps: PreviewDeps = {}) {
   const result = backtest(conv.definition, candles)
   return {
     ok: true as const,
-    mode: 'paper' as const,
     via: conv.via,
     warnings: conv.warnings,
     definition: conv.definition,
