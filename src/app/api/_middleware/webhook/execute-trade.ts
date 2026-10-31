@@ -10,6 +10,7 @@ export interface BotData {
   api_secret: string;
   user_id: string;
   webhook_secret: string;
+  mode?: 'paper' | 'live';
   order_size?: number; // Percentage of available balance to use (25, 50, 75, or 100)
   name: string;
   password?: string; // Bitget passphrase
@@ -353,6 +354,24 @@ export async function executeTrade(
   bot: BotData
 ): Promise<{ order: OrderResult; calculatedAmount: number }> {
   try {
+    // Paper fills use only caller-supplied prices and amounts; never query an exchange.
+    if (bot.mode === 'paper' || process.env.TRADING_MODE === 'paper') {
+      const amount = alert.amount;
+      if (!amount || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(price) || price <= 0) {
+        throw new Error('Paper trading requires a positive finite amount and price');
+      }
+      return {
+        calculatedAmount: amount,
+        order: {
+          id: 'paper-' + crypto.randomUUID(),
+          symbol: alert.symbol,
+          side: alert.action,
+          amount, price, average: price, filled: amount, remaining: 0,
+          status: 'closed', cost: amount * price,
+        },
+      };
+    }
+
     const isHyperliquid = bot.exchange.toLowerCase() === 'hyperliquid';
 
     // For Hyperliquid, we need to set credentials correctly
