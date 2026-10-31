@@ -29,3 +29,9 @@ describe('runPreview', () => {
     await expect(runPreview({ pine: 'x', candles: { exchange: '../x', symbol: 'BTC/USDT' } })).rejects.toThrow()
   })
 })
+
+describe('exchange allowlist', () => {
+  it('rejects exchanges outside the public allowlist', async () => {
+    await expect(runPreview({ pine: 'x', candles: { exchange: 'coinbaseprivate', symbol: 'BTC/USDT' } })).rejects.toThrow()
+  })
+})

@@ -4,6 +4,7 @@ import { convertPine, type AiConverter } from './converter'
 import { createPublicExchange, fetchPublicCandles, type PublicOhlcvSource } from './market-data'
 import { sampleCandles } from './sample-candles'
 import { LIMITS, type Candle } from './types'
+import { PUBLIC_EXCHANGES, TIMEFRAMES } from './exchanges'
 
 const candleSchema = z.object({
   time: z.number(), open: z.number(), high: z.number(), low: z.number(), close: z.number(), volume: z.number(),
@@ -15,9 +16,9 @@ export const previewSchema = z.object({
     z.literal('sample'),
     z.array(candleSchema).min(2).max(LIMITS.maxCandles),
     z.object({
-      exchange: z.string().regex(/^[a-z0-9]+$/).max(30),
+      exchange: z.enum(PUBLIC_EXCHANGES),
       symbol: z.string().regex(/^[A-Z0-9]+\/[A-Z0-9]+(:[A-Z0-9]+)?$/).max(30),
-      timeframe: z.enum(['1m', '5m', '15m', '1h', '4h', '1d']).default('1h'),
+      timeframe: z.enum(TIMEFRAMES).default('1h'),
       limit: z.number().int().min(50).max(1000).default(500),
     }),
   ]).default('sample'),
