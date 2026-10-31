@@ -63,3 +63,18 @@ describe('market data service', () => {
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('/api/exchange/market POST maps Bitget 429 (DDoSProtection during loadMarkets) to 429, not 500', () => {
+  it('returns 429', async () => {
+    vi.resetModules()
+    vi.doMock('@/app/api/_middleware/exchange-middleware', () => ({
+      createExchangeClient: async () => ({ id: 'bitget' }),
+      fetchMarketData: async () => { throw new ccxt.DDoSProtection('bitget {"code":"429","msg":"Too Many Requests"}') },
+    }))
+    const { POST } = await import('@/app/api/exchange/market/route')
+    const { NextRequest } = await import('next/server')
+    const res = await POST(new NextRequest('http://localhost/api/exchange/market', { method: 'POST', body: JSON.stringify({ exchange: 'bitget', symbol: 'BTC/USDT' }) }))
+    expect(res.status).toBe(429)
+    vi.doUnmock('@/app/api/_middleware/exchange-middleware')
+  })
+})
