@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { supabase } from './client';
+import { getSupabase } from './client';
 import type { Trade } from '@/types';
 import type { Database } from './schema';
 
@@ -17,7 +17,7 @@ export async function getTrades(userId: string): Promise<Trade[]> {
     throw new DatabaseError('Database configuration missing');
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('trades')
     .select('*')
     .eq('user_id', userId)
@@ -30,7 +30,7 @@ export async function getTrades(userId: string): Promise<Trade[]> {
 export async function saveTrade(
   trade: TradeInsert
 ): Promise<void> {
-  const client = supabase as unknown as import('@supabase/supabase-js').SupabaseClient<any>
+  const client = getSupabase() as unknown as import('@supabase/supabase-js').SupabaseClient<any>
   const { error } = await client
     .from('trades')
     .insert(trade as any)
@@ -50,7 +50,7 @@ export async function updateTradeStatus(
     updates.pnl = pnl
   }
 
-  const client = supabase as unknown as import('@supabase/supabase-js').SupabaseClient<any>
+  const client = getSupabase() as unknown as import('@supabase/supabase-js').SupabaseClient<any>
   const { error } = await client
     .from('trades')
     .update(updates as any)
@@ -62,7 +62,7 @@ export async function updateTradeStatus(
 }
 
 export async function toggleBot(botId: string, enabled: boolean): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('bots')
     .update({ enabled })
     .eq('id', botId)

@@ -43,22 +43,12 @@ async function decryptWithFallback(
   value: string
 ): Promise<string> {
   try {
-    logger.info(`Attempting to decrypt ${field}`, {
-      exchange,
-      length: value.length,
-      format: value.includes(':') ? 'encrypted' : 'plaintext',
-    })
     const decrypted = await decrypt(value)
-    logger.info(`Successfully decrypted ${field}`, {
-      exchange,
-      length: decrypted.length,
-    })
+    if (!decrypted) throw new Error('Empty credential')
     return decrypted
-  } catch (error) {
-    const err = normalizeError(error)
-    logger.error(`Failed to decrypt ${field}`, err, { exchange })
-    logger.info(`Using provided ${field} value as fallback`, { exchange })
-    return value
+  } catch {
+    // Never log the underlying error: cryptographic errors may contain credential data.
+    throw new ApiError(`Failed to decrypt ${field} for ${exchange}`, 500)
   }
 }
 

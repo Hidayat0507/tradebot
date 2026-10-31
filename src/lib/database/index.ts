@@ -1,3 +1,3 @@
 export * from './schema';
 export * from './operations';
-export { supabase } from './client';
+export { getSupabase, ConfigError } from './client';
