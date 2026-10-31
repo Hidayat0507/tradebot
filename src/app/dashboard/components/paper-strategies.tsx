@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -52,7 +53,7 @@ export default function PaperStrategies() {
             <table className="w-full">
               <thead><tr className="text-left text-muted-foreground"><th>Bot</th><th>Status</th><th>TF</th><th>Last candle</th><th>Last signal</th><th>PnL</th></tr></thead>
               <tbody>
-                {data.strategies.length === 0 && <tr><td colSpan={6} className="py-2 text-muted-foreground">No saved strategies. Save one from /strategy.</td></tr>}
+                {data.strategies.length === 0 && <tr><td colSpan={6} className="py-2 text-muted-foreground">No saved strategies yet. <Link href="/strategy" className="text-blue-400 underline">Create one</Link>.</td></tr>}
                 {data.strategies.map((s) => (
                   <tr key={s.bot_id} className="border-t">
                     <td>{s.bots?.name ?? s.bot_id} <span className="text-muted-foreground">{s.bots?.pair}</span></td>
