@@ -51,6 +51,37 @@ describe('migrations apply on real Postgres', () => {
     // Documents a pre-existing bug in the merged webhook_signals migration (#5). Fix separately.
     expect(applied['20261031000000_webhook_signals.sql']).toMatch(/foreign key constraint .* cannot be implemented/)
   })
+  it('fix migration 20261031000400 creates signals with uuid bot_id (confirm hosted type first)', async () => {
+    expect(applied['20261031000400_signals_bot_id_uuid.sql']).toBeNull()
+    expect(await rows(`select format_type(atttypid, atttypmod) t from pg_attribute where attrelid = 'public.signals'::regclass and attname = 'bot_id'`)).toEqual([{ t: 'uuid' }])
+  })
+})
+
+describe('signals (after fix)', () => {
+  it('service role can claim; duplicate claim → unique violation; users have no access', async () => {
+    await as('service_role', null, async () => {
+      expect(await fails(`insert into public.signals (bot_id, alert_id, ts) values ('${BOT_A}', 'pine:x', now())`)).toBeNull()
+      expect(await fails(`insert into public.signals (bot_id, alert_id, ts) values ('${BOT_A}', 'pine:x', now())`)).toMatch(/duplicate key/)
+    })
+    await as('authenticated', A, async () => {
+      expect(await fails('select * from public.signals')).toMatch(/permission denied/)
+    })
+  })
+  it('fix is idempotent and converts an existing text column', async () => {
+    const fix = readFileSync(path.join(root, 'supabase/migrations/20261031000400_signals_bot_id_uuid.sql'), 'utf8')
+    expect(await fails(fix)).toBeNull()
+    const db2 = new PGlite()
+    await db2.exec(readFileSync(path.join(root, 'supabase/tests/local/bootstrap.sql'), 'utf8'))
+    await db2.exec(`create table public.signals (id bigint generated always as identity primary key, bot_id text not null, alert_id text not null, ts timestamptz not null, unique (bot_id, alert_id));`)
+    await db2.exec(fix)
+    expect((await db2.query(`select format_type(atttypid, atttypmod) t from pg_attribute where attrelid = 'public.signals'::regclass and attname = 'bot_id'`)).rows).toEqual([{ t: 'uuid' }])
+  })
+  it('refuses to run when bots.id is not uuid', async () => {
+    const db3 = new PGlite()
+    await db3.exec(`create role anon; create role authenticated; create role service_role; create table public.bots (id text primary key);`)
+    const fix = readFileSync(path.join(root, 'supabase/migrations/20261031000400_signals_bot_id_uuid.sql'), 'utf8')
+    await expect(db3.exec(fix)).rejects.toThrow(/expected uuid/)
+  })
 })
 
 describe('bot_strategies RLS as real roles', () => {
