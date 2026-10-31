@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "next lint",
     "migrate:custom": "node scripts/apply-custom-migrations.js",
-    "test": "vitest"
+    "test": "vitest",
+    "test:db": "vitest run src/test/db"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.0",
@@ -51,6 +52,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
     "@next/swc-wasm-nodejs": "15.1.6",
     "@types/node": "^20",
     "@types/react": "^19",
