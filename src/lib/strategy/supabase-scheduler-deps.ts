@@ -73,10 +73,13 @@ export function createSupabaseSchedulerDeps(
       return true
     },
     executeOrder: paperOrderPath(supabase),
-    async saveCursor(botId, lastCandleTime) {
+    async saveCursor(botId, lastCandleTime, lastSignal) {
       const { error } = await supabase
         .from('bot_strategies')
-        .update({ last_candle_time: new Date(lastCandleTime).toISOString() })
+        .update({
+          last_candle_time: new Date(lastCandleTime).toISOString(),
+          ...(lastSignal ? { last_signal_at: new Date(lastSignal.time).toISOString(), last_signal: lastSignal.summary.slice(0, 100) } : {}),
+        })
         .eq('bot_id', botId)
       if (error) throw new Error('failed to save cursor')
     },

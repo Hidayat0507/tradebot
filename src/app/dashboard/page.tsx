@@ -7,6 +7,7 @@ import { StatsCard } from "@/components/dashboard/stats-card"
 import MarketOverview from './components/market-overview'
 import TradingInsights from './components/trading-insights'
 import ActivePositions from './components/active-positions'
+import PaperStrategies from './components/paper-strategies'
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -277,6 +278,9 @@ export default function DashboardPage() {
             />
           </CardContent>
         </Card>
+
+        {/* In-app Pine strategies (paper) */}
+        <PaperStrategies />
 
         {/* Active Positions Section with Unrealized P&L */}
         <ActivePositions trades={trades} />
