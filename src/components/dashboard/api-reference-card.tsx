@@ -14,6 +14,8 @@ const ApiReferenceCard: React.FC = () => {
       </ul>
       <p><strong>Example Payload:</strong></p>
       <pre>{`{
+  "ts": "{{timenow}}",
+  "alert_id": "{{strategy.order.id}}-{{timenow}}-{{strategy.order.action}}",
   "bot_id": "123",
   "symbol": "BTC/USDC",
   "action": "BUY",

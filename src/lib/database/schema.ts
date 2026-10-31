@@ -14,13 +14,18 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      signals: {
+        Row: { id: number; bot_id: string; alert_id: string; ts: string; created_at: string }
+        Insert: { bot_id: string; alert_id: string; ts: string }
+        Update: { bot_id?: string; alert_id?: string; ts?: string }
+      }
       bots: {
         Row: {
+          mode: 'live' | 'paper'
           id: string
           user_id: string
           name: string
           exchange: string
-          mode?: 'live' | 'paper'
           pair: string
           max_position_size: number
           stoploss_percentage?: number
@@ -33,11 +38,11 @@ export interface Database {
           updated_at: string
         }
         Insert: {
+          mode?: 'live' | 'paper'
           id?: string
           user_id: string
           name: string
           exchange: string
-          mode?: 'live' | 'paper'
           pair: string
           max_position_size: number
           stoploss_percentage?: number
@@ -50,11 +55,11 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          mode?: 'live' | 'paper'
           id?: string
           user_id?: string
           name?: string
           exchange?: string
-          mode?: 'live' | 'paper'
           pair?: string
           max_position_size?: number
           stoploss_percentage?: number
