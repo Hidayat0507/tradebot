@@ -49,7 +49,7 @@ describe('/strategy page P1', () => {
   })
   it('nav links to /strategy', () => {
     const nav = readFileSync(path.resolve(__dirname, '../components/Navigation.tsx'), 'utf8')
-    expect(nav).toMatch(/<NavLink href="\/strategy">/)
+    expect(nav).toMatch(/<NavLink[^>]*href="\/strategy">/)
   })
   it('hint covers every supported indicator', () => {
     expect(SUPPORTED_PINE.indicators).toEqual(expect.arrayContaining(['ta.atr', 'ta.macd']))
