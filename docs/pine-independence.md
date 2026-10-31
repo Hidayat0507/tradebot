@@ -78,3 +78,18 @@ explicit per-bot opt-in plus the existing order caps — out of scope for this P
 2. Scheduler (cron) fetching closed candles and running paper executor.
 3. AI converter implementation behind a server-side flag, with eval set.
 4. More Pine: `ta.atr`, `ta.macd`, stop/limit, `strategy.exit`, history refs.
+
+## Phase 2 (feat/pine-phase2)
+- Pine: `ta.atr`, `ta.macd` tuple, `x[n]` history, `strategy.exit` stop/limit (backtest).
+- UI: exchange / symbol / timeframe picker for public candles (allowlist: binance, bybit, okx, kraken, bitget).
+- DB: `supabase/migrations/20261031000200_bot_strategies.sql` — one definition per bot, owner RLS,
+  insert/update require owning the bot, `mode = 'paper'` check, scheduler cursor not user-writable.
+  **Written only, not applied.**
+- `src/lib/strategy/paper-scheduler.ts` — `runPaperTick(deps)`:
+  1. load enabled strategies, 2. fetch public candles, drop the still-open candle,
+  3. evaluate, replay signals into buy/sell intents (`signalsToIntents`),
+  4. only intents after the stored cursor (first run: latest closed bar only — never replays history),
+  5. claim `pine:<bot>:<candle>:<seq>:<side>` in `signals` (idempotent), 6. call the existing
+  order path with the bot forced to `mode: 'paper'` (`paperOrderPath` refuses anything else),
+  7. advance cursor. Errors are isolated per bot. No cron route / DB loader wired yet.
+- Not yet live in scheduler: `strategy.exit` stop/limit (needs intrabar monitoring).

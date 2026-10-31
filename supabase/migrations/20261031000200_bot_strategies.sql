@@ -11,6 +11,7 @@ create table if not exists public.bot_strategies (
   timeframe text not null default '1h' check (timeframe in ('1m', '5m', '15m', '1h', '4h', '1d')),
   -- Phase 2: in-app strategies may only run in paper mode.
   mode text not null default 'paper' check (mode = 'paper'),
+  paper_quote_size numeric not null default 100 check (paper_quote_size > 0 and paper_quote_size <= 1000000),
   enabled boolean not null default false,
   last_candle_time timestamptz,
   created_at timestamptz not null default now(),
