@@ -5,7 +5,7 @@ export const FREE_PLAN_MAX_BOTS = 5
 export const PRO_PLAN_MAX_BOTS = 25
 
 function getAdminEmailSet() {
-  const value = process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || ''
+  const value = process.env.ADMIN_EMAILS || ''
   return new Set(
     value
       .split(',')

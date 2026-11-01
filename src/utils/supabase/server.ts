@@ -28,8 +28,8 @@ export async function createClient(request: NextRequest) {
 
 /**
  * Create a service role client that can bypass RLS policies
- * Use this only for server-to-server operations like webhooks
- * where user authentication isn't available
+ * Use only on the server. User-initiated writes must authenticate and verify
+ * ownership before using this client, and explicitly filter by the owner.
  */
 export function createServiceClient() {
   return createSupabaseClient(

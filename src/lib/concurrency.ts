@@ -15,7 +15,9 @@ export function createLimiter(max: number) {
       })
       next()
     })
-  return Object.assign(limit, { get active() { return active }, get pending() { return queue.length } })
+  return Object.defineProperties(limit, {
+    active: { get: () => active }, pending: { get: () => queue.length },
+  }) as typeof limit & { readonly active: number; readonly pending: number }
 }
 
 /** Map with bounded concurrency; returns settled results in input order. */

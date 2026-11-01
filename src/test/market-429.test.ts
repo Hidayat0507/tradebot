@@ -78,3 +78,23 @@ describe('/api/exchange/market POST maps Bitget 429 (DDoSProtection during loadM
     vi.doUnmock('@/app/api/_middleware/exchange-middleware')
   })
 })
+
+
+describe('real public market fetch error mapping', () => {
+  it.each([ccxt.DDoSProtection, ccxt.RateLimitExceeded])('preserves 429 through middleware (%s)', async (ErrorType) => {
+    const { fetchMarketData } = await import('@/app/api/_middleware/exchange-middleware')
+    const client = { id: 'bitget', fetchTicker: vi.fn().mockRejectedValue(new ErrorType('throttled')) }
+    await expect(fetchMarketData(client as never, 'UNIQUE/USDT')).rejects.toMatchObject({ statusCode: 429 })
+  })
+  it('reports active and pending limiter slots while work is queued', async () => {
+    const limit = createLimiter(1)
+    let release!: () => void
+    const first = limit(() => new Promise<void>(resolve => { release = resolve }))
+    const second = limit(async () => undefined)
+    await Promise.resolve()
+    expect(limit.active).toBe(1)
+    expect(limit.pending).toBe(1)
+    release()
+    await Promise.all([first, second])
+  })
+})

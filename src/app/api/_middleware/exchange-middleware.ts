@@ -43,22 +43,12 @@ async function decryptWithFallback(
   value: string
 ): Promise<string> {
   try {
-    logger.info(`Attempting to decrypt ${field}`, {
-      exchange,
-      length: value.length,
-      format: value.includes(':') ? 'encrypted' : 'plaintext',
-    })
     const decrypted = await decrypt(value)
-    logger.info(`Successfully decrypted ${field}`, {
-      exchange,
-      length: decrypted.length,
-    })
+    if (!decrypted) throw new Error('Empty credential')
     return decrypted
-  } catch (error) {
-    const err = normalizeError(error)
-    logger.error(`Failed to decrypt ${field}`, err, { exchange })
-    logger.info(`Using provided ${field} value as fallback`, { exchange })
-    return value
+  } catch {
+    // Never log the underlying error: cryptographic errors may contain credential data.
+    throw new ApiError(`Failed to decrypt ${field} for ${exchange}`, 500)
   }
 }
 
@@ -115,7 +105,7 @@ async function createClientInternal(
     if (error instanceof ccxt.PermissionDenied) {
       throw new ApiError('API key does not have required permissions', 403)
     }
-    if (error instanceof ccxt.RateLimitExceeded) {
+    if (error instanceof ccxt.RateLimitExceeded || error instanceof ccxt.DDoSProtection) {
       throw new ApiError('Rate limit exceeded - please try again later', 429)
     }
     if (error instanceof ccxt.NetworkError) {
@@ -275,6 +265,10 @@ export const fetchMarketData = async (exchange_client: ExchangeClient, symbol: s
       exchange: exchange_client.id,
       symbol,
     })
+
+    if (error instanceof ccxt.RateLimitExceeded || error instanceof ccxt.DDoSProtection) {
+      throw new ApiError('Exchange rate limit hit, try again shortly', 429)
+    }
 
     if (error instanceof ccxt.ExchangeError) {
       if (error.message.includes('BadSymbol')) {
