@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { createServiceClient } from '@/utils/supabase/server';
 import { randomBytes, createHash } from 'crypto';
 import {
   getBotWithOwnership,
@@ -14,20 +15,21 @@ export async function POST(
 ) {
   try {
     const { id } = await props.params;
-    const { supabase, user } = await getBotWithOwnership(request, id);
+    const { user } = await getBotWithOwnership(request, id);
     
     // Generate webhook secret and hash for storage
     const webhookSecret = randomBytes(32).toString('hex');
     const webhookSecretHash = 'sha256:' + createHash('sha256').update(webhookSecret).digest('hex');
 
     // Update the bot
-    const { error } = await supabase
+    const { error } = await createServiceClient()
       .from('bots')
       .update({ 
         webhook_secret: webhookSecretHash,
         updated_at: new Date().toISOString()
       })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) {
       logger.error('Failed to update webhook secret', normalizeError(error), { botId: id, userId: user.id });

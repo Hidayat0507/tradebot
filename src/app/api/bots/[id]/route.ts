@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { createServiceClient } from '@/utils/supabase/server'
 import type { BotFormData } from '@/lib/validations/bot'
 import {
   getBotWithOwnership,
@@ -37,7 +38,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await props.params;
-    const { bot: _bot, supabase, user } = await getBotWithOwnership(request, id)
+    const { bot: _bot, user } = await getBotWithOwnership(request, id)
     const body = await request.json() as BotFormData
     
     // Validate update data
@@ -60,7 +61,12 @@ export async function PUT(
     }
 
     // Prepare update data
-    const updateData = { ...body, updated_at: new Date().toISOString() }
+    // Service writes bypass RLS: never copy arbitrary request fields (id/user_id).
+    const { name, exchange, pair, max_position_size, stoploss_percentage,
+      enabled, api_key, api_secret, password } = body
+    const updateData = { name, exchange, pair, max_position_size,
+      stoploss_percentage, enabled, api_key, api_secret, password,
+      updated_at: new Date().toISOString() }
     
     // Encrypt API secret if provided
     if (updateData.api_secret) {
@@ -84,10 +90,11 @@ export async function PUT(
       }
     }
 
-    const { data: updatedBot, error } = await supabase
+    const { data: updatedBot, error } = await createServiceClient()
       .from('bots')
       .update(updateData)
       .eq('id', id)
+      .eq('user_id', user.id)
       .select()
       .single()
 

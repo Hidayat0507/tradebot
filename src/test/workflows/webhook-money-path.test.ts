@@ -23,6 +23,9 @@ const post = (body: unknown) => POST(new NextRequest('http://localhost/api/webho
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Freeze Date only so the replay-window checks are deterministic on slow CI.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
   vi.stubEnv('TRADING_MODE', 'paper')
   vi.stubEnv('WEBHOOK_REPLAY_WINDOW_SECONDS', '60')
   mocks.selectBot.mockImplementation(() => ({ eq: () => ({ single: async () => ({ data: bot, error: null }) }) }))
@@ -36,7 +39,7 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 describe('webhook money path in paper mode', () => {
   it('claims the signal before saving a simulated fill without exchange calls', async () => {

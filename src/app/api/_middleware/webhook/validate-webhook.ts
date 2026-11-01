@@ -29,7 +29,7 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
         // Convert string to number if needed
         const numValue = typeof value === 'string' ? parseFloat(value) : value;
         return typeof numValue === 'undefined' || 
-          (typeof numValue === 'number' && !isNaN(numValue) && numValue > 0) || 
+          (typeof numValue === 'number' && Number.isFinite(numValue) && numValue > 0) ||
           'Price must be a positive number';
       },
       stoplossPercent: (value) => {
@@ -43,7 +43,7 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
         // Convert string to number if needed
         const numValue = typeof value === 'string' ? parseFloat(value) : value;
         return typeof numValue === 'undefined' || 
-          (typeof numValue === 'number' && !isNaN(numValue) && numValue > 0 && numValue <= 100) || 
+          (typeof numValue === 'number' && Number.isFinite(numValue) && numValue > 0 && numValue <= 100) ||
           'order_size must be a percent of balance between 0 and 100';
       }
     }

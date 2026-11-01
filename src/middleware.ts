@@ -1,3 +1,5 @@
+import { rateLimiter, requestIp, rateLimitResponse } from '@/lib/rate-limit'
+import { isAdminUser } from '@/lib/subscriptions'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -6,8 +8,7 @@ const protectedRoutes = [
   '/bots', 
   '/bots/create', 
   '/dashboard', 
-  '/profile',
-  '/strategy'
+  '/profile', '/admin', '/logs', '/billing', '/assets', '/strategy'
 ]
 
 // Check if a route should bypass authentication
@@ -20,13 +21,17 @@ function shouldBypassAuth(pathname: string) {
   return publicApiEndpoints.some(pattern => {
     // Convert pattern to regex, replacing * with wildcard matcher
     const regexPattern = pattern.replace(/\*/g, '[^/]+');
-    return new RegExp(regexPattern).test(pathname);
+    return new RegExp(`^${regexPattern}$`).test(pathname);
   });
 }
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
   const pathname = request.nextUrl.pathname
+
+  if (pathname.startsWith('/api/') && pathname !== '/api/webhook' && pathname !== '/api/stripe/webhook') {
+    if (!await rateLimiter.consume(`auth:${requestIp(request)}`, 60, 60000)) return rateLimitResponse()
+  }
 
   // Skip auth check for public API endpoints
   if (shouldBypassAuth(pathname)) {
@@ -63,33 +68,11 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Check auth for protected routes
-  if (protectedRoutes.some(route => pathname.startsWith(route))) {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      return NextResponse.json(
-        { error: 'Authentication error' },
-        { status: 401 }
-      );
-    }
-    
-    // Try to refresh the session if no active session
-    if (!session) {
-      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession()
-      
-      if (refreshError || !refreshedSession) {
-        // For API routes, return JSON response
-        if (pathname.startsWith('/api/')) {
-          return NextResponse.json(
-            { error: 'Authentication required' },
-            { status: 401 }
-          );
-        }
-        // For other routes, redirect to auth page
-        return NextResponse.redirect(new URL('/auth', request.url))
-      }
+  if (protectedRoutes.some(route => pathname === route || pathname.startsWith(route + '/'))) {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) return NextResponse.redirect(new URL('/auth', request.url))
+    if ((pathname === '/admin' || pathname.startsWith('/admin/')) && !isAdminUser(user)) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 

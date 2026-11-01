@@ -39,52 +39,6 @@ const TRADING_PAIRS = [
   'AAVE/USDT',
 ] as const
 
-const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'))
-
-function getWebCrypto(): Crypto {
-  const crypto = typeof globalThis !== 'undefined'
-    ? (globalThis.crypto || (globalThis as unknown as { msCrypto?: Crypto }).msCrypto)
-    : undefined
-
-  if (!crypto || typeof crypto.getRandomValues !== 'function') {
-    throw new Error('Secure random number generation is not supported in this environment')
-  }
-
-  return crypto
-}
-
-function bytesToHex(bytes: Uint8Array, uppercase = false) {
-  const hex = Array.from(bytes, (byte) => BYTE_TO_HEX[byte]).join('')
-  return uppercase ? hex.toUpperCase() : hex
-}
-
-function generateClientBotId() {
-  const crypto = getWebCrypto()
-  const bytes = new Uint8Array(4)
-  crypto.getRandomValues(bytes)
-  return bytesToHex(bytes, true)
-}
-
-async function generateWebhookSecret() {
-  const crypto = getWebCrypto()
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  const plain = bytesToHex(bytes)
-
-  if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
-    throw new Error('Secure hashing is not supported in this environment')
-  }
-
-  const encoded = new TextEncoder().encode(plain)
-  const digest = await crypto.subtle.digest('SHA-256', encoded)
-  const hashHex = bytesToHex(new Uint8Array(digest))
-
-  return {
-    plain,
-    hashed: `sha256:${hashHex}`,
-  }
-}
-
 const createBotFormSchema = z.object({
   name: z.string().min(3, 'Bot name must be at least 3 characters'),
   exchange: z.enum(['hyperliquid', 'bitget'] as const),
@@ -203,35 +157,17 @@ export function CreateBotForm() {
         return
       }
 
-      // Generate a unique ID for the bot
-      const botId = generateClientBotId()
-
-      // Generate a webhook secret
-      const { plain: webhookSecretPlaintext, hashed: webhookSecretHash } = await generateWebhookSecret()
-
-      // Step 1: Create the bot first with placeholder values
-      const { error: botError } = await supabase
-        .from('bots')
-        .insert({
-          id: botId,
-          user_id: userId,
-          name: values.name,
-          exchange: values.exchange,
-          pair: values.pair, // keep CCXT symbol format with slash
-          max_position_size: values.max_position_size,
-          stoploss_percentage: values.stoploss_percentage,
-          enabled: false,
-          // Add placeholder values that will be replaced after validation
-          api_key: 'pending_validation',
-          api_secret: 'pending_validation',
-          webhook_secret: webhookSecretHash, // Store hashed secret immediately
-        })
-        .select()
-        .single()
-
-      if (botError) {
-        throw new Error(`Failed to create bot: ${botError.message}`)
+      const creationResponse = await fetch('/api/bots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...values, enabled: false }),
+      })
+      const creation = await creationResponse.json()
+      if (!creationResponse.ok || !creation.success) {
+        throw new Error(creation.error || 'Failed to create bot')
       }
+      const botId = creation.data.id
+      const webhookSecretPlaintext = creation.data.webhook_secret
 
       // Step 2: Validate exchange credentials
       const requestBody = {

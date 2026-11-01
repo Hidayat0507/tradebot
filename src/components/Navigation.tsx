@@ -8,7 +8,6 @@ import { createClient } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
 import ProfileMenu from './profile-menu'
-import { isAdminUser } from '@/lib/subscriptions'
 import { APP_NAME } from '@/lib/format'
 import { Menu, X } from 'lucide-react'
 
@@ -40,6 +39,7 @@ const NavLink = ({ href, children, onClick, block }: { href: string; children: R
 
 export default function Navigation() {
   const router = useRouter()
+  const [isAdmin, setIsAdmin] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
@@ -74,9 +74,17 @@ export default function Navigation() {
       <NavLink block={block} href="/bots">Bots</NavLink>
       <NavLink block={block} href="/strategy">Strategies</NavLink>
       <NavLink block={block} href="/assets">Assets</NavLink>
-      {user && isAdminUser(user) && <NavLink block={block} href="/admin">Admin</NavLink>}
+      {user && isAdmin && <NavLink block={block} href="/admin">Admin</NavLink>}
     </>
   )
+  useEffect(() => {
+    let active = true
+    setIsAdmin(false)
+    if (user) fetch('/api/subscription').then(res => res.ok ? res.json() : null)
+      .then(result => { if (active) setIsAdmin(result?.data?.plan === 'admin') })
+      .catch(() => { if (active) setIsAdmin(false) })
+    return () => { active = false }
+  }, [user])
 
   return (
     <nav aria-label="Main" className="sticky top-0 z-40 w-full border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl">

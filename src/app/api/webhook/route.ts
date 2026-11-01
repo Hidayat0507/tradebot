@@ -1,3 +1,4 @@
+import { rateLimiter, requestIp, rateLimitResponse } from '@/lib/rate-limit';
 import { NextRequest } from 'next/server';
 import { createHash, timingSafeEqual } from 'crypto';
 export const runtime = 'nodejs';
@@ -15,9 +16,11 @@ import { logger, normalizeError } from '@/lib/logging';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!await rateLimiter.consume(`webhook:ip:${requestIp(request)}`, 60, 60000)) return rateLimitResponse();
     // Parse and validate the alert (avoid logging raw payload)
     const data = await request.json();
     const alert = validateWebhookAlert(data);
+
 
     // Log the incoming request for debugging
     logger.debug('Validated webhook alert', {
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
     const trimmedId = alert.bot_id.trim();
     const { data: bot, error } = await serviceClient
       .from('bots')
-      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, max_position_size, mode')
+      .select('id, exchange, api_key, api_secret, password, enabled, user_id, webhook_secret, name, pair, max_position_size, mode')
       .eq('id', trimmedId)
       .single();
     
@@ -78,10 +81,13 @@ export async function POST(request: NextRequest) {
     } catch {
       validSecret = false;
     }
-    if (!validSecret) {
+    if (!stored || !provided || !validSecret) {
       logger.warn('Invalid webhook secret');
       throw new ApiError('Invalid webhook secret', 401);
     }
+
+    // Per-bot budget only after auth, so a caller without the secret cannot starve a bot.
+    if (!await rateLimiter.consume(`webhook:bot:${bot.id}`, 30, 60000)) return rateLimitResponse();
 
     logger.info('Webhook secret verified, processing alert', { botId: bot.id });
 
@@ -95,14 +101,8 @@ export async function POST(request: NextRequest) {
     if (signalError?.code === '23505') throw new ApiError('Duplicate alert', 409);
     if (signalError) throw new ApiError('Failed to record signal', 500);
 
-    // Use order_size from webhook or max_position_size from bot config
-    const botWithOrderSize = {
-      ...bot,
-      order_size: alert.order_size || bot.max_position_size || 100 // Use webhook order_size, fallback to max_position_size, then 100%
-    };
-
-    // Process the webhook alert
-    const trade = await processWebhookAlert(alert, botWithOrderSize, serviceClient);
+    // max_position_size is an absolute base-currency cap, not a percentage.
+    const trade = await processWebhookAlert(alert, bot, serviceClient);
 
     return successResponse({ success: true, trade });
   } catch (error) {
