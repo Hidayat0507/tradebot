@@ -68,6 +68,7 @@ function DashboardContent({ botNames }: { botNames: Map<string, string> }) {
   const [showInsights, setShowInsights] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [tradesError, setTradesError] = useState<string | null>(null)
+  const [paperTradesNotice, setPaperTradesNotice] = useState<string | null>(null)
   const [isLoadingTrades, setIsLoadingTrades] = useState(true)
   const supabase = createClient()
 
@@ -121,6 +122,7 @@ function DashboardContent({ botNames }: { botNames: Map<string, string> }) {
   const fetchTrades = useCallback(async () => {
     setIsLoadingTrades(true)
     setTradesError(null)
+    setPaperTradesNotice(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -153,28 +155,6 @@ function DashboardContent({ botNames }: { botNames: Map<string, string> }) {
         throw error
       }
 
-      // Get simulated trades from logs
-      const { data: simLogs, error: simError } = await supabase
-        .from('logs')
-        .select(`
-          id,
-          bot_id,
-          bots (
-            name
-          ),
-          timestamp,
-          message,
-          details
-        `)
-        .eq('user_id', user.id)
-        .eq('message', 'Simulated trade created (not saved to database)')
-        .order('timestamp', { ascending: false })
-        .limit(100)
-
-      if (simError) {
-        throw simError
-      }
-
       // Process database trades
       const formattedDbTrades = (dbTrades || []).map(trade => ({
         id: trade.id,
@@ -191,23 +171,46 @@ function DashboardContent({ botNames }: { botNames: Map<string, string> }) {
         paper: isPaperTradeId((trade as { external_id?: string }).external_id),
       }))
 
-      // Process simulated trades from logs
-      const simTrades = (simLogs || []).filter(log => log.details && log.details.trade).map(log => {
-        const trade = log.details.trade
-        return {
-          id: trade.id || log.id,
-          botId: trade.bot_id || log.bot_id,
-          botName: log.details.botName || resolveBotName(log.bots, trade.bot_id || log.bot_id, botNames),
-          symbol: trade.symbol,
-          side: trade.side,
-          status: trade.status,
-          size: trade.size,
-          price: trade.price,
-          pnl: trade.pnl,
-          timestamp: trade.created_at || log.timestamp,
-          simulated: true
-        }
-      })
+      // Paper logs are optional: a failure must not discard database trades.
+      let simTrades: TradeEntry[] = []
+      try {
+        const { data: simLogs, error: simError } = await supabase
+          .from('logs')
+          .select(`
+            id,
+            bot_id,
+            bots (
+              name
+            ),
+            timestamp,
+            message,
+            details
+          `)
+          .eq('user_id', user.id)
+          .eq('message', 'Simulated trade created (not saved to database)')
+          .order('timestamp', { ascending: false })
+          .limit(100)
+
+        if (simError) throw simError
+        simTrades = (simLogs || []).filter(log => log.details && log.details.trade).map(log => {
+          const trade = log.details.trade
+          return {
+            id: trade.id || log.id,
+            botId: trade.bot_id || log.bot_id,
+            botName: log.details.botName || resolveBotName(log.bots, trade.bot_id || log.bot_id, botNames),
+            symbol: trade.symbol,
+            side: trade.side,
+            status: trade.status,
+            size: trade.size,
+            price: trade.price,
+            pnl: trade.pnl,
+            timestamp: trade.created_at || log.timestamp,
+            simulated: true
+          }
+        })
+      } catch {
+        setPaperTradesNotice('Paper trades could not load. Some paper activity may be missing. Please try refreshing trades.')
+      }
 
       // Combine both types of trades
       setTrades([...formattedDbTrades, ...simTrades])
@@ -262,6 +265,8 @@ function DashboardContent({ botNames }: { botNames: Map<string, string> }) {
             ))}
           </ul>
         </nav>
+
+        {paperTradesNotice && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">{paperTradesNotice}</p>}
 
         {/* KPIs: live (real money) and paper (simulated) never mixed */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="kpis">
