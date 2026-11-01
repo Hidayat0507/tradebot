@@ -1,3 +1,4 @@
+import { fetchLivePrices } from '@/lib/asset-prices';
 import React, { useEffect, useState } from 'react';
 import { Pie } from 'react-chartjs-2';
 import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -12,30 +13,13 @@ interface BotForChart {
 interface AssetBalance {
   amount: number;
   usdValue: number;
+  priceUnavailable: boolean;
 }
 
 interface ExchangeBalances {
   [exchange: string]: {
     [asset: string]: AssetBalance;
   };
-}
-
-// Crypto price mapping (same as in page.tsx)
-const CRYPTO_PRICES: Record<string, number> = {
-  'BTC': 50000,
-  'ETH': 3000,
-  'BNB': 300,
-  'SOL': 100,
-  'XRP': 0.5,
-  'ADA': 0.3,
-  'USDT': 1,
-  'USDC': 1,
-  'BUSD': 1,
-  'DAI': 1,
-};
-
-function getCryptoPrice(symbol: string): number {
-  return CRYPTO_PRICES[symbol.toUpperCase()] || 0;
 }
 
 export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
@@ -55,10 +39,10 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
           grouped[bot.exchange].push(bot);
         });
 
-        // For each exchange, fetch and aggregate balances using the server API per bot
+        // For each exchange, fetch and aggregate raw balances using the server API per bot
         const balances: ExchangeBalances = {};
         for (const [exchange, botsInExchange] of Object.entries(grouped)) {
-          const assetTotals: { [asset: string]: AssetBalance } = {};
+          const assetAmounts: Record<string, number> = {};
           await Promise.all(
             botsInExchange.map(async (bot) => {
               try {
@@ -72,25 +56,30 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
                   total?: Record<string, number>
                 } | undefined;
                 if (!balanceData || !balanceData.total) return;
-                
+
                 for (const [asset, amount] of Object.entries(balanceData.total)) {
                   if (!amount || typeof amount !== 'number' || amount <= 0) continue;
-                  
-                  // Calculate USD value
-                  const price = getCryptoPrice(asset);
-                  const usdValue = amount * price;
-                  
-                  if (!assetTotals[asset]) {
-                    assetTotals[asset] = { amount: 0, usdValue: 0 };
-                  }
-                  assetTotals[asset].amount += amount;
-                  assetTotals[asset].usdValue += usdValue;
+                  assetAmounts[asset] = (assetAmounts[asset] ?? 0) + amount;
                 }
               } catch {
                 // ignore this bot on error
               }
             })
           );
+
+          // Fetch one batch of live prices per exchange for every asset held
+          const currenciesNeedingPrice = Object.keys(assetAmounts);
+          const livePrices = await fetchLivePrices(exchange, currenciesNeedingPrice);
+
+          const assetTotals: { [asset: string]: AssetBalance } = {};
+          for (const [asset, amount] of Object.entries(assetAmounts)) {
+            const price = livePrices[asset] ?? null;
+            assetTotals[asset] = {
+              amount,
+              usdValue: price === null ? 0 : amount * price,
+              priceUnavailable: price === null,
+            };
+          }
           balances[exchange] = assetTotals;
         }
 
@@ -115,8 +104,10 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
         
         // Sort assets by USD value (descending)
         const sortedAssets = Object.entries(assetBalances).sort((a, b) => b[1].usdValue - a[1].usdValue);
+        const hasUnavailablePrice = sortedAssets.some(([, data]) => data.priceUnavailable);
         
         const labels = sortedAssets.map(([asset, data]) => {
+          if (data.priceUnavailable) return `${asset}: price unavailable`;
           const percent = totalUsdValue > 0 ? ((data.usdValue / totalUsdValue) * 100).toFixed(2) : '0.00';
           const usdFormatted = data.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           return `${asset}: $${usdFormatted} (${percent}%)`;
@@ -145,10 +136,13 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
               {exchange.charAt(0).toUpperCase() + exchange.slice(1)}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Total: ${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Estimated total: {hasUnavailablePrice ? '~' : ''}${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {hasUnavailablePrice && (
+                <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">(some prices unavailable)</span>
+              )}
             </p>
             <div style={{ width: 280, height: 280 }}>
-              <Pie 
+              {totalUsdValue === 0 ? <p className="p-6 text-center text-sm text-gray-600 dark:text-gray-400">Prices unavailable for this allocation.</p> : <Pie
                 data={data}
                 options={{
                   plugins: {
@@ -172,7 +166,7 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
                     }
                   }
                 }}
-              />
+              />}
             </div>
           </div>
         );
