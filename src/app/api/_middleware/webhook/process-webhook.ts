@@ -1,14 +1,12 @@
+import { enableTestnet } from '@/lib/exchanges/testnet';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { createExchangeClient, validateMarket } from '../exchange-middleware';
 import { logger, normalizeError } from '@/lib/logging';
-import { marketCache } from '@/lib/market-cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database/schema';
-import type { TickerResult } from '@/types/exchange';
 import { BotData } from './execute-trade';
-import { executeTrade, isPaperMode, isTestnetMode } from './execute-trade';
-import { enableTestnet } from '@/lib/exchanges/testnet';
+import { executeTrade, validateOrderSafety, isPaperMode, isTestnetMode } from './execute-trade';
 import { saveTrade } from './save-trade';
 
 /**
@@ -27,55 +25,33 @@ export async function processWebhookAlert(
       );
       return await saveTrade(supabase, bot.user_id, bot.id, order, alert, alert.price!, calculatedAmount);
     }
+
+    validateOrderSafety(alert, bot);
+
     // Create exchange client with proper credentials
     const exchange_client = await createExchangeClient(bot.exchange, {
       apiKey: bot.api_key,
       apiSecret: bot.api_secret,
       password: bot.password
     });
+
     const testnet = isTestnetMode(bot);
-    if (testnet) enableTestnet(exchange_client as unknown as Parameters<typeof enableTestnet>[0]);
+    if (testnet) enableTestnet(exchange_client);
 
     // Validate market and get current price
-    const isValidMarket = await validateMarket(exchange_client, alert.symbol);
+    const isValidMarket = testnet
+      ? (await exchange_client.fetchMarkets()).some(market => market.symbol === alert.symbol)
+      : await validateMarket(exchange_client, alert.symbol);
     if (!isValidMarket) {
       throw new ApiError(`Invalid market: ${alert.symbol}`, 400);
     }
-    
-    // Try to get ticker from cache first
-    let ticker: TickerResult;
-    // Testnet prices differ from mainnet: never share the mainnet ticker cache.
-    const cachedTicker = testnet ? undefined : marketCache.get<TickerResult>(exchange_client.id, alert.symbol, 'ticker');
-    
-    if (cachedTicker) {
-      logger.info('Using cached ticker for trade price', { 
-        exchange: exchange_client.id, 
-        symbol: alert.symbol
-      });
-      ticker = cachedTicker;
-    } else {
-      // Fetch fresh ticker data
-      logger.info('Fetching fresh ticker for trade price', { 
-        exchange: exchange_client.id, 
-        symbol: alert.symbol
-      });
-      ticker = await exchange_client.fetchTicker(alert.symbol);
-      
-      // Cache the ticker for future use
-      if (!testnet) marketCache.set(exchange_client.id, alert.symbol, 'ticker', ticker);
-    }
-    
-    if (!ticker.last) {
+
+    // Safety decisions require a fresh ticker, not a cached or alert supplied price.
+    const ticker = await exchange_client.fetchTicker(bot.pair);
+    const tradePrice = ticker.last;
+    if (tradePrice === undefined || !Number.isFinite(tradePrice) || tradePrice <= 0) {
       throw new ApiError('Could not determine trade price', 400);
     }
-
-    // Use the price from the alert if provided, otherwise use market price
-    const tradePrice = alert.price || ticker.last;
-    logger.info('Using price for trade', { 
-      price: tradePrice, 
-      source: alert.price ? 'alert' : 'market',
-      marketPrice: ticker.last
-    });
 
     // Execute trade
     const { order, calculatedAmount } = await executeTrade(exchange_client, alert, tradePrice, bot);

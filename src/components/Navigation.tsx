@@ -8,7 +8,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
 import ProfileMenu from './profile-menu'
-import { isAdminUser } from '@/lib/subscriptions'
+
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
   const pathname = usePathname()
@@ -35,6 +35,7 @@ const NavLink = ({ href, children }: { href: string; children: React.ReactNode }
 
 export default function Navigation() {
   const router = useRouter()
+  const [isAdmin, setIsAdmin] = useState(false)
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
@@ -58,6 +59,15 @@ export default function Navigation() {
     }
   }, [router])
 
+  useEffect(() => {
+    let active = true
+    setIsAdmin(false)
+    if (user) fetch('/api/subscription').then(res => res.ok ? res.json() : null)
+      .then(result => { if (active) setIsAdmin(result?.data?.plan === 'admin') })
+      .catch(() => { if (active) setIsAdmin(false) })
+    return () => { active = false }
+  }, [user])
+
   return (
     <nav className="sticky top-0 z-40 w-full border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between px-4">
@@ -74,7 +84,7 @@ export default function Navigation() {
             <NavLink href="/bots">Bots</NavLink>
             <NavLink href="/strategy">Strategies</NavLink>
             <NavLink href="/assets">Assets</NavLink>
-            {user && isAdminUser(user) && (
+            {user && isAdmin && (
               <NavLink href="/admin">Admin</NavLink>
             )}
           </div>

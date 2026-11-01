@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/server'
+import { createServiceClient } from '@/utils/supabase/server'
+import { ApiError, getBotWithOwnership } from './api-handler'
 import { encrypt } from '@/utils/encryption'
 import type { SupportedExchange } from '@/lib/database/schema'
 import type { Database } from '@/lib/database/schema'
@@ -16,6 +17,10 @@ export class ExchangeError extends Error {
 function mapToExchangeError(error: unknown): ExchangeError {
   if (error instanceof ExchangeError) {
     return error
+  }
+
+  if (error instanceof ApiError) {
+    return new ExchangeError(error.message, error.statusCode)
   }
 
   if (error instanceof Error) {
@@ -54,6 +59,7 @@ export async function validateAndStoreCredentials(
   password?: string
 ): Promise<{ success: boolean; message: string }> {
   try {
+    const { user } = await getBotWithOwnership(request, botId)
     const plugin = getExchangePlugin(exchange)
 
     const providedCreds: Partial<Record<string, string | undefined>> = {
@@ -94,7 +100,7 @@ export async function validateAndStoreCredentials(
       }
     }
 
-    const supabase = await createClient(request)
+    const supabase = createServiceClient()
     const updateFields: Database['public']['Tables']['bots']['Update'] = {
       api_key: apiKey,
       api_secret: encryptedSecret ?? '',
@@ -109,6 +115,7 @@ export async function validateAndStoreCredentials(
       .from('bots')
       .update(updateFields)
       .eq('id', botId)
+      .eq('user_id', user.id)
 
     if (error) {
       throw new ExchangeError(`Failed to store exchange credentials: ${error.message}`, 500)
