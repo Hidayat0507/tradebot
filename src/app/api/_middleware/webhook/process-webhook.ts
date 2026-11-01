@@ -1,3 +1,4 @@
+import { enableTestnet } from '@/lib/exchanges/testnet';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
 import { createExchangeClient, validateMarket } from '../exchange-middleware';
@@ -5,7 +6,7 @@ import { logger, normalizeError } from '@/lib/logging';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database/schema';
 import { BotData } from './execute-trade';
-import { executeTrade, validateOrderSafety, isPaperMode } from './execute-trade';
+import { executeTrade, validateOrderSafety, isPaperMode, isTestnetMode } from './execute-trade';
 import { saveTrade } from './save-trade';
 
 /**
@@ -34,8 +35,13 @@ export async function processWebhookAlert(
       password: bot.password
     });
 
+    const testnet = isTestnetMode(bot);
+    if (testnet) enableTestnet(exchange_client);
+
     // Validate market and get current price
-    const isValidMarket = await validateMarket(exchange_client, alert.symbol);
+    const isValidMarket = testnet
+      ? (await exchange_client.fetchMarkets()).some(market => market.symbol === alert.symbol)
+      : await validateMarket(exchange_client, alert.symbol);
     if (!isValidMarket) {
       throw new ApiError(`Invalid market: ${alert.symbol}`, 400);
     }

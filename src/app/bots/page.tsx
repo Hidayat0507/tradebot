@@ -9,7 +9,7 @@ import { formatOrderSizePct, modeOf, ORDER_SIZE } from '@/lib/bot-config'
 import { botStatusLabel } from '@/lib/format'
 
 type Bot = {
-  mode?: 'live' | 'paper'
+  mode?: 'live' | 'paper' | 'testnet'
   id: string
   user_id: string
   name: string

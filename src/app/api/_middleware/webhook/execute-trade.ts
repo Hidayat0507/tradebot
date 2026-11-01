@@ -1,3 +1,4 @@
+import { assertTestnetClient } from '@/lib/exchanges/testnet';
 import { createHash } from 'crypto';
 import type { TradingViewSignal } from '@/types';
 import { ApiError } from '../api-handler';
@@ -14,7 +15,7 @@ export interface BotData {
   pair: string;
   order_size?: number;
   max_position_size?: number;
-  mode?: 'paper' | 'live';
+  mode?: 'paper' | 'live' | 'testnet';
   name: string;
   password?: string;
 }
@@ -65,6 +66,8 @@ export async function executeTrade(
         paper: true,
       } };
     }
+
+    if (isTestnetMode(bot)) assertTestnetClient(exchange);
 
     if (!Number.isFinite(price) || price <= 0) throw new ApiError('Invalid ticker price', 400);
     // Keep main's Hyperliquid signing setup for live orders.
@@ -128,4 +131,8 @@ export async function executeTrade(
     if (error instanceof ApiError) throw error;
     throw new ApiError(`Failed to execute trade: ${normalizedError.message}`, 500);
   }
+}
+
+export function isTestnetMode(bot: BotData): boolean {
+  return bot.mode === 'testnet';
 }

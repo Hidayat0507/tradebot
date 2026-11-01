@@ -19,6 +19,7 @@ export function formatOrderSizePct(v: number | string | null | undefined): strin
   return `${Number(n.toFixed(2))}% of balance`
 }
 
-export type BotMode = 'live' | 'paper'
-export const modeOf = (bot: { mode?: string | null }): BotMode => (bot.mode === 'paper' ? 'paper' : 'live')
+export type BotMode = 'live' | 'paper' | 'testnet'
+export const modeOf = (bot: { mode?: string | null }): BotMode =>
+  bot.mode === 'paper' ? 'paper' : bot.mode === 'testnet' ? 'testnet' : 'live'
 export const isPaperTradeId = (externalId: string | null | undefined) => !!externalId && externalId.startsWith('paper-')
