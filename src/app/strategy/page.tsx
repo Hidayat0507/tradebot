@@ -1,5 +1,6 @@
 'use client'
 
+import { formatDateTime } from '@/lib/format'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -206,20 +207,20 @@ export default function StrategyPage() {
               <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">{JSON.stringify(result.definition, null, 2)}</pre>
             </details>
           )}
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm">
             <thead><tr className="text-left"><th>Dir</th><th>Entry</th><th>Exit</th><th>Reason</th><th>PnL %</th></tr></thead>
             <tbody>
               {result.trades.map((t, i) => (
                 <tr key={i} className="border-t">
                   <td>{t.direction}</td>
-                  <td>{new Date(t.entryTime).toLocaleString()} @ {t.entryPrice}</td>
-                  <td>{new Date(t.exitTime).toLocaleString()} @ {t.exitPrice}{t.open ? ' (open)' : ''}</td>
+                  <td>{formatDateTime(t.entryTime)} @ {t.entryPrice}</td>
+                  <td>{formatDateTime(t.exitTime)} @ {t.exitPrice}{t.open ? ' (open)' : ''}</td>
                   <td>{t.exitReason}</td>
                   <td className={t.pnlPct >= 0 ? 'text-green-700' : 'text-red-700'}>{t.pnlPct.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </div>

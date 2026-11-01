@@ -6,9 +6,10 @@ import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { ModeBadge } from '@/components/bot/ModeBadge'
 import { formatOrderSizePct, modeOf, ORDER_SIZE } from '@/lib/bot-config'
+import { botStatusLabel } from '@/lib/format'
 
 type Bot = {
-  mode?: 'live' | 'paper'
+  mode?: 'live' | 'paper' | 'testnet'
   id: string
   user_id: string
   name: string
@@ -94,6 +95,7 @@ export default function BotsPage() {
     <div className="page-container">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold">Your Bots</h1>
+        <Button asChild size="sm"><Link href="/bots/create">+ Create bot</Link></Button>
       </div>
 
       {error && (
@@ -102,7 +104,31 @@ export default function BotsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
+      <ul className="md:hidden space-y-3" aria-label="Bots">
+        {bots.map(bot => (
+          <li key={bot.id} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900 dark:text-gray-100 break-words">{bot.name}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{bot.exchange} · {bot.pair}</p>
+              </div>
+              <ModeBadge mode={modeOf(bot)} />
+            </div>
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+              <div><dt className="text-xs text-gray-500 dark:text-gray-400">Order size</dt><dd>{formatOrderSizePct(bot.max_position_size)}</dd></div>
+              <div><dt className="text-xs text-gray-500 dark:text-gray-400">Stoploss</dt><dd>{bot.stoploss_percentage ? `${bot.stoploss_percentage}%` : '-'}</dd></div>
+              <div><dt className="text-xs text-gray-500 dark:text-gray-400">Status</dt><dd>{botStatusLabel(bot.enabled)}</dd></div>
+            </dl>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <Button asChild variant="default" size="sm"><Link href={`/bots/${bot.id}`}>View</Link></Button>
+              <Button variant={bot.enabled ? "secondary" : "primary"} size="sm" onClick={() => handleToggleBot(bot)}>{bot.enabled ? 'Pause' : 'Activate'}</Button>
+              <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(bot.id)} aria-label={`Delete ${bot.name}`}>Delete</Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden md:block rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
@@ -131,7 +157,7 @@ export default function BotsPage() {
                       ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
                       : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                   }`}>
-                    {bot.enabled ? 'Active' : 'Paused'}
+                    {botStatusLabel(bot.enabled)}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

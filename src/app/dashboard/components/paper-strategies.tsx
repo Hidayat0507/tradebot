@@ -1,5 +1,6 @@
 'use client'
 
+import { formatDateTime } from '@/lib/format'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +9,7 @@ import type { PaperPnl, PaperTradeRow, StrategyHealth, StrategyStatusRow } from 
 
 type Data = { strategies: (StrategyStatusRow & { health: StrategyHealth })[]; trades: PaperTradeRow[]; pnl: PaperPnl }
 
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—')
+const fmt = (iso: string | null) => formatDateTime(iso)
 const HEALTH: Record<StrategyHealth, string> = {
   ok: 'bg-green-100 text-green-800', waiting: 'bg-blue-100 text-blue-800',
   stale: 'bg-yellow-100 text-yellow-900', disabled: 'bg-gray-100 text-gray-700',
@@ -37,7 +38,7 @@ export default function PaperStrategies() {
           <CardTitle className="text-xl font-semibold">Paper trading</CardTitle>
           <CardDescription>Simulated only — no real orders. Pine strategy status, paper trades and paper P&L.</CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
+        <Button variant="outline" size="sm" onClick={load} aria-label="Refresh paper trading">Refresh</Button>
       </CardHeader>
       <CardContent className="space-y-6 text-sm">
         {error && <p className="text-red-700">{error}</p>}
@@ -50,7 +51,7 @@ export default function PaperStrategies() {
               <Stat label="Win rate" value={`${(data.pnl.winRate * 100).toFixed(0)}%`} />
               <Stat label="Strategies enabled" value={`${data.strategies.filter((s) => s.enabled).length}/${data.strategies.length}`} />
             </div>
-            <table className="w-full">
+            <div className="overflow-x-auto"><table className="w-full min-w-[480px]">
               <thead><tr className="text-left text-muted-foreground"><th>Bot</th><th>Status</th><th>TF</th><th>Last candle</th><th>Last signal</th><th>PnL</th></tr></thead>
               <tbody>
                 {data.strategies.length === 0 && <tr><td colSpan={6} className="py-2 text-muted-foreground">No saved strategies yet. <Link href="/strategy" className="text-blue-400 underline">Create one</Link>.</td></tr>}
@@ -65,10 +66,10 @@ export default function PaperStrategies() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             <div>
               <h3 className="mb-2 font-medium">Recent paper trades</h3>
-              <table className="w-full">
+              <div className="overflow-x-auto"><table className="w-full min-w-[480px]">
                 <thead><tr className="text-left text-muted-foreground"><th>Time</th><th>Symbol</th><th>Side</th><th>Size</th><th>Price</th></tr></thead>
                 <tbody>
                   {data.trades.length === 0 && <tr><td colSpan={5} className="py-2 text-muted-foreground">No paper trades yet.</td></tr>}
@@ -80,7 +81,7 @@ export default function PaperStrategies() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </>
         )}

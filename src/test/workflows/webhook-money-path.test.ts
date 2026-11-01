@@ -21,11 +21,15 @@ const post = (body: unknown) => POST(new NextRequest('http://localhost/api/webho
   method: 'POST', body: JSON.stringify(body),
 }))
 
+// Freeze the clock: the replay-window checks compare against Date.now(). With a real clock the
+// "+61s" case only had a 1s margin, so under a loaded box (>1s between building the payload and
+// validating it) it slid back inside the 60s window and flaked.
+const FROZEN_NOW = new Date('2026-10-31T08:00:00.000Z')
+
 beforeEach(() => {
-  vi.clearAllMocks()
-  // Freeze Date only so the replay-window checks are deterministic on slow CI.
   vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+  vi.setSystemTime(FROZEN_NOW)
+  vi.clearAllMocks()
   vi.stubEnv('TRADING_MODE', 'paper')
   vi.stubEnv('WEBHOOK_REPLAY_WINDOW_SECONDS', '60')
   mocks.selectBot.mockImplementation(() => ({ eq: () => ({ single: async () => ({ data: bot, error: null }) }) }))
@@ -39,7 +43,7 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers() })
 
 describe('webhook money path in paper mode', () => {
   it('claims the signal before saving a simulated fill without exchange calls', async () => {
@@ -49,6 +53,16 @@ describe('webhook money path in paper mode', () => {
     expect(mocks.insertSignal.mock.invocationCallOrder[0]).toBeLessThan(mocks.insertTrade.mock.invocationCallOrder[0])
     expect(mocks.constructor).not.toHaveBeenCalled()
     expect(mocks.createOrder).not.toHaveBeenCalled()
+  })
+  it.each([-60, 60])('accepts timestamps exactly on the window edge (%s seconds)', async (offset) => {
+    expect((await post({ ...payload(), ts: new Date(Date.now() + offset * 1000).toISOString() })).status).toBe(200)
+  })
+  it('is immune to slow processing between building and validating the alert', async () => {
+    const body = { ...payload(), ts: new Date(Date.now() + 61_000).toISOString() }
+    vi.setSystemTime(FROZEN_NOW.getTime() + 5_000) // simulate a 5s stall under load
+    expect((await post(body)).status).toBe(200) // +56s from "now" → inside window, deterministically
+    vi.setSystemTime(FROZEN_NOW)
+    expect((await post({ ...body, alert_id: 'e2' })).status).toBe(400)
   })
   it.each([-61, 61])('rejects timestamps outside the window (%s seconds)', async (offset) => {
     expect((await post({ ...payload(), ts: new Date(Date.now() + offset * 1000).toISOString() })).status).toBe(400)

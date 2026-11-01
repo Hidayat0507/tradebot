@@ -105,7 +105,7 @@ async function createClientInternal(
     if (error instanceof ccxt.PermissionDenied) {
       throw new ApiError('API key does not have required permissions', 403)
     }
-    if (error instanceof ccxt.RateLimitExceeded) {
+    if (error instanceof ccxt.RateLimitExceeded || error instanceof ccxt.DDoSProtection) {
       throw new ApiError('Rate limit exceeded - please try again later', 429)
     }
     if (error instanceof ccxt.NetworkError) {
@@ -265,6 +265,10 @@ export const fetchMarketData = async (exchange_client: ExchangeClient, symbol: s
       exchange: exchange_client.id,
       symbol,
     })
+
+    if (error instanceof ccxt.RateLimitExceeded || error instanceof ccxt.DDoSProtection) {
+      throw new ApiError('Exchange rate limit hit, try again shortly', 429)
+    }
 
     if (error instanceof ccxt.ExchangeError) {
       if (error.message.includes('BadSymbol')) {

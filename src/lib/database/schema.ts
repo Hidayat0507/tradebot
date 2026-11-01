@@ -21,7 +21,7 @@ export interface Database {
       }
       bots: {
         Row: {
-          mode: 'live' | 'paper'
+          mode: 'live' | 'paper' | 'testnet'
           id: string
           user_id: string
           name: string
@@ -38,7 +38,7 @@ export interface Database {
           updated_at: string
         }
         Insert: {
-          mode?: 'live' | 'paper'
+          mode?: 'live' | 'paper' | 'testnet'
           id?: string
           user_id: string
           name: string
@@ -55,7 +55,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
-          mode?: 'live' | 'paper'
+          mode?: 'live' | 'paper' | 'testnet'
           id?: string
           user_id?: string
           name?: string

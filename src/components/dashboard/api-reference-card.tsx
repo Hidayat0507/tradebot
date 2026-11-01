@@ -1,9 +1,10 @@
+import { APP_NAME } from '@/lib/format'
 import React from 'react';
 
 const ApiReferenceCard: React.FC = () => {
   return (
     <div className="api-reference-card">
-      <h2>Trading Bot API</h2>
+      <h2>{APP_NAME} API</h2>
       <p><strong>Endpoint:</strong> POST /api/webhook</p>
       <p><strong>Key Parameters:</strong></p>
       <ul>

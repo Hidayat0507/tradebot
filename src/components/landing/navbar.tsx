@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/lib/format'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -9,7 +10,7 @@ export function LandingNavbar() {
           href="/"
           className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
         >
-          Trading Bot
+          {APP_NAME}
         </Link>
 
         <div className="flex items-center gap-4">

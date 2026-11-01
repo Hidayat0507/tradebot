@@ -1,5 +1,6 @@
 'use client'
 
+import { botStatusLabel } from '@/lib/format'
 import { useState, useEffect } from 'react'
 import { useParams } from "next/navigation"
 import { createClient } from '@/utils/supabase/client'
@@ -11,7 +12,7 @@ import { formatOrderSizePct, modeOf, ORDER_SIZE } from '@/lib/bot-config'
 import { secretDisplay, secretForExample } from '@/lib/webhook-secret-display'
 
 type Bot = {
-  mode: 'live' | 'paper'
+  mode: 'live' | 'paper' | 'testnet'
   id: string
   user_id: string
   name: string
@@ -129,7 +130,7 @@ export default function BotDetailsPage() {
                       ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white' 
                       : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                   }`}>
-                    {bot.enabled ? 'Enabled' : 'Disabled'}
+                    {botStatusLabel(bot.enabled)}
                   </span>
                 </div>
               </div>
