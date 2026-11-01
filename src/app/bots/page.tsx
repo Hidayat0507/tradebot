@@ -102,7 +102,7 @@ export default function BotsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>

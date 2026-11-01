@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -35,18 +35,24 @@ interface PositionWithUnrealized extends Trade {
 
 interface ActivePositionsProps {
   trades: Trade[]
+  loading?: boolean
+  error?: string | null
+  onRetry?: () => void
 }
 
 const POSITIONS_PER_PAGE = 5
 
-export default function ActivePositions({ trades }: ActivePositionsProps) {
+export default function ActivePositions({ trades, loading = false, error: tradesError = null, onRetry }: ActivePositionsProps) {
   const [positions, setPositions] = useState<PositionWithUnrealized[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
+  const [priceError, setPriceError] = useState<string | null>(null)
+  const requestId = useRef(0)
+
   // Filter only buy orders (open positions) that haven't been closed
-  const openPositions = trades.filter(t => t.side.toLowerCase() === 'buy' && t.price !== null)
+  const openPositions = useMemo(() => trades.filter(t => t.side.toLowerCase() === 'buy' && t.price !== null), [trades])
 
   // Calculate pagination
   const totalPages = Math.ceil(positions.length / POSITIONS_PER_PAGE)
@@ -62,101 +68,70 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
   }, [currentPage, totalPages])
 
   const fetchMarketPrices = useCallback(async () => {
+    const id = ++requestId.current
     if (openPositions.length === 0) {
+      setPositions([])
+      setPriceError(null)
       setIsLoading(false)
+      setIsRefreshing(false)
       return
     }
 
+    setIsRefreshing(true)
+    const priceMap = new Map<string, number>()
     try {
-      // Get unique symbols from open positions
-      const uniqueSymbols = Array.from(new Set(openPositions.map(t => t.symbol)))
-      
-      // Fetch current prices for all symbols
-      const pricePromises = uniqueSymbols.map(async (symbol) => {
-        try {
-          const response = await fetch('/api/exchange/market', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ exchange: 'bitget', symbol })
-          })
-          
-          if (!response.ok) return null
-          
-          const data = await response.json()
-          return {
-            symbol,
-            price: data.success && data.data?.last_price ? data.data.last_price : null
+      const symbols = [...new Set(openPositions.map(t => t.symbol))]
+      for (let offset = 0; offset < symbols.length; offset += 24) {
+        const response = await fetch('/api/exchange/market', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exchange: 'bitget', symbols: symbols.slice(offset, offset + 24) }),
+          signal: AbortSignal.timeout(10000),
+        })
+        if (!response.ok) throw new Error('Price request failed')
+        const payload = await response.json()
+        if (!payload.success || !Array.isArray(payload.data)) throw new Error('Invalid price response')
+        for (const row of payload.data) {
+          if (!row?.error && typeof row?.last_price === 'number' && Number.isFinite(row.last_price) && row.last_price > 0) {
+            priceMap.set(row.symbol, row.last_price)
           }
-        } catch (error) {
-          console.error(`Failed to fetch price for ${symbol}:`, error)
-          return null
         }
-      })
+      }
+    } catch { /* Render the positions even when quotes cannot be loaded. */ }
+    if (id !== requestId.current) return
+    setPriceError(openPositions.some(position => !priceMap.has(position.symbol))
+      ? 'Some current prices are unavailable. Profit and loss totals are incomplete. Try refreshing.' : null)
+    setPositions(openPositions.map(position => {
+      const currentPrice = priceMap.get(position.symbol) ?? null
+      const entryPrice = position.price ?? 0
+      return {
+        ...position, currentPrice,
+        unrealizedPnL: currentPrice !== null && entryPrice > 0 ? (currentPrice - entryPrice) * position.size : null,
+        priceChange: currentPrice !== null && entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : null,
+        holdingTime: calculateHoldingTime(position.timestamp),
+      }
+    }))
+    setIsLoading(false)
+    setIsRefreshing(false)
+  }, [openPositions])
 
-      const priceResults = await Promise.all(pricePromises)
-      const priceMap = new Map<string, number>()
-      
-      priceResults.forEach(result => {
-        if (result && result.price) {
-          priceMap.set(result.symbol, result.price)
-        }
-      })
-
-      // Calculate unrealized P&L for each position
-      const positionsWithUnrealized = openPositions.map(position => {
-        const currentPrice = priceMap.get(position.symbol) || null
-        const entryPrice = position.price || 0
-        
-        let unrealizedPnL = null
-        let priceChange = null
-        
-        if (currentPrice && entryPrice > 0) {
-          // Calculate unrealized P&L: (Current Price - Entry Price) * Size
-          unrealizedPnL = (currentPrice - entryPrice) * position.size
-          // Calculate percentage change
-          priceChange = ((currentPrice - entryPrice) / entryPrice) * 100
-        }
-
-        // Calculate holding time
-        const holdingTime = calculateHoldingTime(position.timestamp)
-
-        return {
-          ...position,
-          currentPrice,
-          unrealizedPnL,
-          priceChange,
-          holdingTime
-        }
-      })
-
-      setPositions(positionsWithUnrealized)
-    } catch (error) {
-      console.error('Error fetching market prices:', error)
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }, [openPositions.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const cancelPriceRequests = useCallback(() => { requestId.current++ }, [])
 
   useEffect(() => {
     fetchMarketPrices()
-    
-    // Refresh prices every 30 seconds
-    const interval = setInterval(fetchMarketPrices, 30000)
-    return () => clearInterval(interval)
-  }, [fetchMarketPrices])
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchMarketPrices()
+    }, 30000)
+    return () => { clearInterval(interval); cancelPriceRequests() }
+  }, [fetchMarketPrices, cancelPriceRequests])
 
-  const handleRefresh = () => {
-    setIsRefreshing(true)
-    fetchMarketPrices()
-  }
+  const handleRefresh = () => { void fetchMarketPrices() }
 
   // Calculate total unrealized P&L
   const totalUnrealizedPnL = positions.reduce((sum, pos) => 
     sum + (pos.unrealizedPnL || 0), 0
   )
 
-  if (isLoading) {
+  if (loading || isLoading) {
     return (
       <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out">
         <CardHeader>
@@ -181,9 +156,22 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <p role="status" className="sr-only">Loading positions…</p>
           {[1, 2, 3].map(i => (
             <Skeleton key={i} className="h-12 w-full mb-2" />
           ))}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (tradesError) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Active Positions</CardTitle></CardHeader>
+        <CardContent>
+          <p role="alert" className="mb-3 text-red-600 dark:text-red-400">{tradesError}</p>
+          <Button variant="outline" onClick={onRetry}>Try again</Button>
         </CardContent>
       </Card>
     )
@@ -216,7 +204,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
         <CardContent>
           <div className="flex items-center justify-center h-32 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-800 dark:text-gray-200">
-              No active positions
+              No active positions. Positions will appear here when your bots have open buy trades.
             </p>
           </div>
         </CardContent>
@@ -249,7 +237,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
               {positions.length} open position{positions.length !== 1 ? 's' : ''} 
               {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`} • Total Unrealized P&L: 
               <span className={`ml-1 font-semibold ${totalUnrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ${totalUnrealizedPnL.toFixed(2)}
+                {priceError ? 'Unavailable' : `$${totalUnrealizedPnL.toFixed(2)}`}
               </span>
             </CardDescription>
           </div>
@@ -257,6 +245,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
             variant="outline" 
             size="sm" 
             onClick={handleRefresh}
+            aria-label="Refresh position prices"
             disabled={isRefreshing}
           >
             <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -264,6 +253,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
         </div>
       </CardHeader>
       <CardContent>
+        {priceError && <p role="alert" className="mb-3 text-sm text-amber-700 dark:text-amber-300">{priceError}</p>}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -293,7 +283,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
                     {position.currentPrice ? (
                       `$${position.currentPrice.toFixed(2)}`
                     ) : (
-                      <span className="text-gray-400">Loading...</span>
+                      <span className="text-gray-400">Price unavailable</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">

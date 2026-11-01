@@ -85,7 +85,7 @@ describe('#4 dashboard PnL split', () => {
     const d = src('src/app/dashboard/page.tsx')
     expect(d).toMatch(/Live P&L \(24h\)/)
     expect(d).toMatch(/Paper P&L \(24h\)/)
-    expect(d).toMatch(/<ActivePositions trades=\{split\.liveTrades\} \/>/)
+    expect(d).toMatch(/<ActivePositions trades=\{split\.liveTrades\} loading=\{isLoadingTrades\} error=\{tradesError\} onRetry=\{fetchTrades\} \/>/)
     expect(d).toMatch(/<TradingInsights trades=\{split\.liveTrades\} \/>/)
     expect(d).not.toMatch(/24h Profit\/Loss/)
   })

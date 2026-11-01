@@ -35,6 +35,7 @@ export default function StrategyPage() {
   const [enabled, setEnabled] = useState(false)
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     createClient().from('bots').select('id, name, pair').order('created_at', { ascending: false })
@@ -82,33 +83,48 @@ export default function StrategyPage() {
   return (
     <div className="container mx-auto max-w-5xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold">Pine strategy (preview)</h1>
+        <h1 className="text-2xl font-bold">Strategies</h1>
         <p className="text-sm text-muted-foreground">
-          Paste a Pine v5 strategy, preview it, and backtest it here.
+          Try out a trading idea before risking real money. Pick an example below, see how it would have
+          performed on past prices, then save it to a bot to run in paper mode.
           <span className="ml-2 rounded bg-amber-400/15 px-2 py-0.5 text-amber-300 ring-1 ring-amber-400/40">Paper mode — no real orders</span>
         </p>
+        <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-gray-700 dark:text-gray-300">
+          <li>Pick an example strategy below, or paste your own Pine Script (the language TradingView alerts use).</li>
+          <li>Click &quot;Convert &amp; backtest&quot; to see how it would have performed.</li>
+          <li>Choose a bot and timeframe, then save it — saved strategies only ever trade in paper mode.</li>
+        </ol>
       </div>
-      <details className="rounded-lg border border-gray-700 bg-gray-900/40 p-3 text-sm text-gray-300">
-        <summary className="cursor-pointer font-medium text-gray-100">What Pine is supported?</summary>
-        <ul className="mt-2 space-y-1">
-          <li><span className="text-gray-400">Indicators:</span> {SUPPORTED_PINE.indicators.join(', ')}</li>
-          <li><span className="text-gray-400">Orders:</span> {SUPPORTED_PINE.orders.join(', ')}</li>
-          <li><span className="text-gray-400">Also:</span> {SUPPORTED_PINE.other.join(', ')}</li>
-        </ul>
-      </details>
+      <label className="flex items-center justify-end gap-2 text-sm text-gray-400">
+        <input type="checkbox" className="h-4 w-4 accent-amber-400" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.target.checked)} />
+        Advanced (engine &amp; JSON details)
+      </label>
+      {showAdvanced && (
+        <details className="rounded-lg border border-gray-700 bg-gray-900/40 p-3 text-sm text-gray-300">
+          <summary className="cursor-pointer font-medium text-gray-100">What Pine is supported?</summary>
+          <ul className="mt-2 space-y-1">
+            <li><span className="text-gray-400">Indicators:</span> {SUPPORTED_PINE.indicators.join(', ')}</li>
+            <li><span className="text-gray-400">Orders:</span> {SUPPORTED_PINE.orders.join(', ')}</li>
+            <li><span className="text-gray-400">Also:</span> {SUPPORTED_PINE.other.join(', ')}</li>
+          </ul>
+        </details>
+      )}
       <div className="flex flex-wrap gap-2">
         <span className="self-center text-sm text-gray-400">Examples:</span>
         {Object.entries(SAMPLE_PINE).map(([k, v]) => (
           <Button key={k} variant="outline" size="sm" onClick={() => setPine(v)}>{SAMPLE_LABELS[k] ?? k}</Button>
         ))}
       </div>
-      <textarea
-        className={`${FIELD} h-64 w-full p-3 font-mono text-sm`}
-        aria-label="Pine Script source"
-        value={pine}
-        onChange={(e) => setPine(e.target.value)}
-        spellCheck={false}
-      />
+      <details>
+        <summary className="cursor-pointer text-sm font-medium">I have my own Pine Script / edit this example</summary>
+        <textarea
+          className={`${FIELD} h-64 w-full p-3 font-mono text-sm`}
+          aria-label="Pine Script source"
+          value={pine}
+          onChange={(e) => setPine(e.target.value)}
+          spellCheck={false}
+        />
+      </details>
       <div className="flex flex-wrap items-end gap-3 text-sm">
         <label className="flex flex-col gap-1">Candles
           <select className={`${FIELD} p-2`} value={source} onChange={(e) => setSource(e.target.value as 'sample' | 'exchange')}>
@@ -184,18 +200,20 @@ export default function StrategyPage() {
             <Stat label="Candles" value={`${result.candleCount} (${result.candleSource})`} />
           </div>
           {result.warnings.map((w) => <p key={w} className="text-sm text-yellow-700">{w}</p>)}
-          <details>
-            <summary className="cursor-pointer text-sm font-medium">Strategy definition (via {result.via})</summary>
-            <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">{JSON.stringify(result.definition, null, 2)}</pre>
-          </details>
+          {showAdvanced && (
+            <details>
+              <summary className="cursor-pointer text-sm font-medium">Strategy definition (via {result.via})</summary>
+              <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">{JSON.stringify(result.definition, null, 2)}</pre>
+            </details>
+          )}
           <table className="w-full text-sm">
             <thead><tr className="text-left"><th>Dir</th><th>Entry</th><th>Exit</th><th>Reason</th><th>PnL %</th></tr></thead>
             <tbody>
               {result.trades.map((t, i) => (
                 <tr key={i} className="border-t">
                   <td>{t.direction}</td>
-                  <td>{new Date(t.entryTime).toISOString().slice(0, 16)} @ {t.entryPrice}</td>
-                  <td>{new Date(t.exitTime).toISOString().slice(0, 16)} @ {t.exitPrice}{t.open ? ' (open)' : ''}</td>
+                  <td>{new Date(t.entryTime).toLocaleString()} @ {t.entryPrice}</td>
+                  <td>{new Date(t.exitTime).toLocaleString()} @ {t.exitPrice}{t.open ? ' (open)' : ''}</td>
                   <td>{t.exitReason}</td>
                   <td className={t.pnlPct >= 0 ? 'text-green-700' : 'text-red-700'}>{t.pnlPct.toFixed(2)}</td>
                 </tr>

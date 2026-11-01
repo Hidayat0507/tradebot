@@ -52,6 +52,13 @@ const createBotFormSchema = z.object({
   api_key: z.string().min(1, 'API Key is required'),
   api_secret: z.string().optional(),
   password: z.string().optional(),
+}).superRefine((values, ctx) => {
+  if (values.exchange === 'bitget' && !values.api_secret?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['api_secret'], message: 'API Secret is required for Bitget' })
+  }
+  if (values.exchange === 'bitget' && !values.password?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['password'], message: 'API passphrase is required for Bitget' })
+  }
 })
 
 type CreateBotFormValues = z.infer<typeof createBotFormSchema>
@@ -85,6 +92,7 @@ export function CreateBotForm() {
       password: '',
     },
   })
+  const isHyperliquid = form.watch('exchange') === 'hyperliquid'
 
   useEffect(() => {
     async function loadUsage() {
@@ -137,16 +145,16 @@ export function CreateBotForm() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError) throw new Error('Authentication failed: Please log in again')
       if (!user) {
-        alert('User is not logged in. Redirecting to login.')
-        router.push('/auth/login')
+        setError('Please sign in to create a bot.')
+        router.push('/auth?next=/bots/create')
         return
       }
 
       const userId = user.id
 
       if (!userId) {
-        alert('User is not logged in. Redirecting to login.')
-        router.push('/auth/login')
+        setError('Please sign in to create a bot.')
+        router.push('/auth?next=/bots/create')
         return
       }
 
@@ -421,16 +429,18 @@ export function CreateBotForm() {
               name="api_key"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API Key</FormLabel>
+                  <FormLabel>{isHyperliquid ? 'Wallet address' : 'API Key'}</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="Your API Key" 
-                      {...field} 
-                      value={field.value || ''} 
+                    <Input
+                      placeholder={isHyperliquid ? 'Your Hyperliquid wallet address' : 'Your API Key'}
+                      {...field}
+                      value={field.value || ''}
                     />
                   </FormControl>
                   <FormDescription>
-                    Your exchange API key
+                    {isHyperliquid
+                      ? 'The public wallet address that will trade on Hyperliquid.'
+                      : 'Your exchange API key'}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -442,14 +452,14 @@ export function CreateBotForm() {
               name="api_secret"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API Secret</FormLabel>
+                  <FormLabel>{isHyperliquid ? 'API wallet private key' : 'API Secret'}</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <Input 
+                      <Input
                         type={showApiSecret ? "text" : "password"}
-                        placeholder="Your API Secret" 
-                        {...field} 
-                        value={field.value || ''} 
+                        placeholder={isHyperliquid ? 'Your API wallet private key' : 'Your API Secret'}
+                        {...field}
+                        value={field.value || ''}
                       />
                       <button
                         type="button"
@@ -462,11 +472,27 @@ export function CreateBotForm() {
                       </button>
                     </div>
                   </FormControl>
-                  <FormDescription>Your exchange API secret.</FormDescription>
+                  <FormDescription>
+                    {isHyperliquid
+                      ? 'The dedicated API wallet private key used to sign orders (optional for balance-only access).'
+                      : 'Your exchange API secret.'}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {isHyperliquid && (
+              <Alert className="border-amber-400 text-amber-600 dark:border-amber-500/60 dark:text-amber-300">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Use an API wallet, never your main wallet</AlertTitle>
+                <AlertDescription>
+                  Create a dedicated API wallet in Hyperliquid and paste that wallet&apos;s private key above —
+                  never your main wallet&apos;s private key. Keep this key secret: anyone with it can act
+                  with the permissions granted to the API wallet.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {form.watch('exchange') === 'bitget' && (
               <FormField

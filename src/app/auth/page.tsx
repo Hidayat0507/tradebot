@@ -1,7 +1,7 @@
 'use client'
 
 import { login, signup, signInWithGoogle } from './actions'
-import { useRouter } from 'next/navigation'
+import { authDestination } from '@/lib/auth-redirect'
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,7 +34,6 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const router = useRouter()
   const supabase = createClient()
 
   const form = useForm<AuthFormValues>({
@@ -52,11 +51,11 @@ export default function AuthPage() {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        router.push('/dashboard')
+        window.location.replace(authDestination(new URLSearchParams(window.location.search).get('next')))
       }
     }
     checkUser()
-  }, [supabase, router])
+  }, [supabase])
 
   const onSubmit = async (data: AuthFormValues) => {
     setError(null)
@@ -95,8 +94,7 @@ export default function AuthPage() {
         setMessage(result.message)
       }
       if (isLogin) {
-        router.push('/dashboard')
-        router.refresh()
+        window.location.replace(authDestination(new URLSearchParams(window.location.search).get('next')))
       }
     }
   }

@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [trades, setTrades] = useState<TradeEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [tradesError, setTradesError] = useState<string | null>(null)
   const [isLoadingTrades, setIsLoadingTrades] = useState(true)
   const supabase = createClient()
 
@@ -79,11 +80,11 @@ export default function DashboardPage() {
 
   const fetchTrades = useCallback(async () => {
     setIsLoadingTrades(true)
+    setTradesError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        console.error('No user found')
-        return
+        throw new Error('Please sign in again')
       }
 
       // Fetch trades from database
@@ -174,6 +175,7 @@ export default function DashboardPage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to fetch trades'
       console.error('Error fetching trades:', message)
+      setTradesError('Unable to load your positions. Check your connection and try again.')
       setTrades([])
     } finally {
       setIsLoadingTrades(false)
@@ -292,7 +294,7 @@ export default function DashboardPage() {
         <PaperStrategies />
 
         {/* Active Positions Section with Unrealized P&L */}
-        <ActivePositions trades={split.liveTrades} />
+        <ActivePositions trades={split.liveTrades} loading={isLoadingTrades} error={tradesError} onRetry={fetchTrades} />
 
         {/* Market Overview Section */}
         <MarketOverview />
