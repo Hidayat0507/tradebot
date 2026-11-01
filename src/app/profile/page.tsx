@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError } from '@/lib/friendly-error'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
@@ -95,7 +96,7 @@ export default function ProfilePage() {
       setMessage({ type: 'success', text: 'Profile updated successfully' })
       router.refresh()
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to update profile'
+      const message = friendlyError(error, 'We could not update your profile. Please try again.')
       setMessage({ type: 'error', text: message })
     }
   }
@@ -123,7 +124,7 @@ export default function ProfilePage() {
       setMessage({ type: 'success', text: 'Password updated successfully' })
       passwordForm.reset()
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to update password'
+      const message = friendlyError(error, 'We could not update your password. Please try again.')
       setMessage({ type: 'error', text: message })
     }
   }

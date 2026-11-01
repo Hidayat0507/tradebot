@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError } from '@/lib/friendly-error'
 import { useState, useEffect, useCallback } from 'react'
 import { resolveBotName } from '@/lib/format'
 import { createClient } from '@/utils/supabase/client'
@@ -18,15 +19,17 @@ type RawLogResponse = {
 }
 
 export default function LogsPage() {
+  const [error, setError] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
   const fetchLogs = useCallback(async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) throw new Error('Please sign in again')
 
       const { data, error } = await supabase
         .from('logs')
@@ -59,7 +62,7 @@ export default function LogsPage() {
         details: log.details || undefined
       })))
     } catch (error) {
-      console.error('Error fetching logs:', error)
+      setError(friendlyError(error, 'We could not load your activity logs. Please try again.'))
     } finally {
       setIsLoading(false)
     }
@@ -80,6 +83,7 @@ export default function LogsPage() {
         </div>
 
         <LogsTable
+          error={error}
           logs={logs}
           isLoading={isLoading}
           onRefresh={fetchLogs}

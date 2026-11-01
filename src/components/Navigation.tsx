@@ -44,6 +44,17 @@ export default function Navigation() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   useEffect(() => { setOpen(false) }, [pathname])
+  useEffect(() => {
+    if (!open) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        document.getElementById('mobile-nav-toggle')?.focus()
+      }
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [open])
 
   useEffect(() => {
     const supabase = createClient()
@@ -66,15 +77,17 @@ export default function Navigation() {
     }
   }, [router])
 
+  const closeMenu = () => setOpen(false)
+
   const links = (
     block: boolean,
   ) => (
     <>
-      <NavLink block={block} href="/dashboard">Dashboard</NavLink>
-      <NavLink block={block} href="/bots">Bots</NavLink>
-      <NavLink block={block} href="/strategy">Strategies</NavLink>
-      <NavLink block={block} href="/assets">Assets</NavLink>
-      {user && isAdmin && <NavLink block={block} href="/admin">Admin</NavLink>}
+      <NavLink block={block} onClick={closeMenu} href="/dashboard">Dashboard</NavLink>
+      <NavLink block={block} onClick={closeMenu} href="/bots">Bots</NavLink>
+      <NavLink block={block} onClick={closeMenu} href="/strategy">Strategies</NavLink>
+      <NavLink block={block} onClick={closeMenu} href="/assets">Assets</NavLink>
+      {user && isAdmin && <NavLink block={block} onClick={closeMenu} href="/admin">Admin</NavLink>}
     </>
   )
   useEffect(() => {
@@ -110,6 +123,7 @@ export default function Navigation() {
           <button
             type="button"
             className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            id="mobile-nav-toggle"
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
             aria-controls="mobile-nav"

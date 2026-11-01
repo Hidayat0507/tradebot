@@ -1,5 +1,6 @@
 "use client"
 
+import { friendlyError, requestFailure } from '@/lib/friendly-error';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,13 +31,13 @@ export function WebhookSecretSection({ bot, freshSecret, onSecretRegenerated }: 
       });
       const responseData = await response.json().catch(() => ({}));
       if (!response.ok || !responseData.data?.webhook_secret) {
-        throw new Error(responseData.error || `Could not generate a new secret (${response.status})`);
+        throw requestFailure(response.status);
       }
       onSecretRegenerated(responseData.data.webhook_secret);
       setCopied(false);
       toast({ title: 'New secret generated', description: 'Copy it now and update your TradingView alerts. It will not be shown again.' });
     } catch (error) {
-      toast({ title: 'Could not generate secret', description: error instanceof Error ? error.message : 'Unexpected error', variant: 'destructive' });
+      toast({ title: 'Could not generate secret', description: friendlyError(error, 'We could not generate a new secret. Please try again.'), variant: 'destructive' });
     } finally {
       setIsRegenerating(false);
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -52,7 +53,7 @@ export default function MarketOverview() {
         body: JSON.stringify({ exchange: 'bitget', symbols: DEFAULT_SYMBOLS.map(item => item.symbol) }),
         signal: AbortSignal.timeout(10000),
       })
-      if (!response.ok) throw new Error(`Market request failed (${response.status})`)
+      if (!response.ok) throw requestFailure(response.status)
       const result = await response.json()
       if (!result.success || !Array.isArray(result.data)) throw new Error('Invalid ticker response')
       const validData = result.data.filter((row: MarketData & { error?: boolean }) => !row?.error && typeof row?.last_price === 'number' && Number.isFinite(row.last_price) && row.last_price > 0)
@@ -60,8 +61,7 @@ export default function MarketOverview() {
       setMarketData(validData.slice(0, 6))
       setError(null)
     } catch (err) {
-      setError('Failed to load market data')
-      console.error(err)
+      setError(friendlyError(err, 'We could not load market prices. Please try again.'))
     } finally {
       setIsLoading(false)
     }

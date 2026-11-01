@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
 import { formatDateTime } from '@/lib/format'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
@@ -23,10 +24,10 @@ export default function PaperStrategies() {
     try {
       const res = await fetch('/api/strategy/dashboard')
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      if (!res.ok) throw requestFailure(res.status)
       setData(json.data)
     } catch (e) {
-      setError((e as Error).message)
+      setError(friendlyError(e, 'We could not load paper trading. Please try again.'))
     }
   }, [])
   useEffect(() => { load() }, [load])
@@ -76,7 +77,7 @@ export default function PaperStrategies() {
                   {data.trades.map((t) => (
                     <tr key={t.id} className="border-t">
                       <td>{fmt(t.created_at)}</td><td>{t.symbol}</td>
-                      <td className={t.side === 'buy' ? 'text-green-700' : 'text-red-700'}>{t.side}</td>
+                      <td className={t.side === 'buy' ? 'text-blue-700 dark:text-blue-300' : 'text-purple-700 dark:text-purple-300'}>{t.side}</td>
                       <td>{Number(t.size).toPrecision(6)}</td><td>{t.price ?? '—'}</td>
                     </tr>
                   ))}

@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
 import { useState, useEffect, useCallback } from 'react'
 import { Loader2, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,7 @@ export function BotBalance({ botId }: BotBalanceProps) {
 
   const fetchBalance = useCallback(async () => {
     if (!botId) {
-      setError('Bot ID is missing')
+      setError('Choose a bot to view its balance.')
       return
     }
 
@@ -35,11 +36,7 @@ export function BotBalance({ botId }: BotBalanceProps) {
       })
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}))
-        const message = typeof errorPayload.error === 'string'
-          ? errorPayload.error
-          : `Failed to fetch balance (status ${response.status})`
-        throw new Error(message)
+        throw requestFailure(response.status)
       }
 
       const payload = await response.json()
@@ -65,7 +62,7 @@ export function BotBalance({ botId }: BotBalanceProps) {
 
       setBalance(formatted)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch balance'
+      const message = friendlyError(err, 'We could not load this balance. Check your exchange connection and try again.')
       setError(message)
     } finally {
       setLoading(false)

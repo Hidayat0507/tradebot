@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
 import { useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -59,12 +60,12 @@ export function BillingOverview({ className, showHeader = true }: BillingOvervie
       const json = (await res.json()) as ApiResponse<SubscriptionResponse>
 
       if (!res.ok || !json.success || !json.data) {
-        throw new Error(json.error || 'Failed to load subscription')
+        throw requestFailure(res.status)
       }
 
       setSubscription(json.data)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unexpected error'
+      const message = friendlyError(err, 'We could not open your billing information. Please try again.')
       setError(message)
     } finally {
       setLoading(false)
@@ -86,12 +87,12 @@ export function BillingOverview({ className, showHeader = true }: BillingOvervie
       const json = (await res.json()) as ApiResponse<{ url: string }>
 
       if (!res.ok || !json.success || !json.data?.url) {
-        throw new Error(json.error || 'Unable to start Stripe session')
+        throw requestFailure(res.status)
       }
 
       window.location.assign(json.data.url)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unexpected error'
+      const message = friendlyError(err, 'We could not open your billing information. Please try again.')
       setError(message)
     } finally {
       setActionLoading(false)
@@ -111,7 +112,8 @@ export function BillingOverview({ className, showHeader = true }: BillingOvervie
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/40 dark:bg-red-900/10">
-          {error}
+          <p role="alert">{error}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={loadSubscription}>Try again</Button>
         </div>
       )}
 

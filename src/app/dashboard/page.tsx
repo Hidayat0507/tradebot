@@ -1,5 +1,8 @@
 'use client'
 
+import { friendlyError } from '@/lib/friendly-error'
+import { EmptyState } from '@/components/empty-state'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useState, useEffect, useCallback } from 'react'
 import Link from "next/link"
 import { createClient } from '@/utils/supabase/client'
@@ -23,28 +26,59 @@ import LogsTable, { type LogEntry } from '@/components/logs-table'
 import TradesTable, { type TradeEntry } from '@/components/trades-table'
 
 export default function DashboardPage() {
+  const [botNames, setBotNames] = useState<Map<string, string> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const supabase = createClient()
+  const loadBots = useCallback(async () => {
+    setError(null)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) throw authError
+      if (!user) throw new Error('Please sign in again')
+      const { data, error } = await supabase.from('bots').select('id, name').eq('user_id', user.id)
+      if (error) throw error
+      setBotNames(new Map((data ?? []).map(bot => [bot.id, bot.name])))
+    } catch (error) {
+      setError(friendlyError(error, 'We could not load your dashboard. Please try again.'))
+    }
+  }, [supabase])
+  useEffect(() => { void loadBots() }, [loadBots])
+
+  if (error) return <main className="page-container space-y-4"><Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert><Button onClick={loadBots}>Try again</Button></main>
+  if (botNames === null) return <main className="page-container" role="status">Loading your dashboard…</main>
+  if (botNames.size === 0) return (
+    <main className="page-container">
+      <EmptyState title="Create your first bot" description="Set up a bot to see your trades, positions and activity here. We will guide you through each step." createBot>
+        <ol className="mx-auto mb-6 max-w-md space-y-2 text-left text-sm text-gray-600 dark:text-gray-300">
+          <li>1. Choose your exchange and trading pair.</li>
+          <li>2. Review order size and stop-loss settings.</li>
+          <li>3. Connect your exchange, then set up TradingView alerts.</li>
+        </ol>
+        <p className="mb-6 text-sm text-gray-500">Your new bot starts paused so you can review it before activating.</p>
+      </EmptyState>
+    </main>
+  )
+  return <DashboardContent botNames={botNames} />
+}
+
+function DashboardContent({ botNames }: { botNames: Map<string, string> }) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [trades, setTrades] = useState<TradeEntry[]>([])
+  const [logsError, setLogsError] = useState<string | null>(null)
+  const [showInsights, setShowInsights] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [tradesError, setTradesError] = useState<string | null>(null)
   const [isLoadingTrades, setIsLoadingTrades] = useState(true)
   const supabase = createClient()
 
-  // Bot names by id: fallback when the embedded join is missing (e.g. deleted FK, older rows)
-  const loadBotNames = useCallback(async () => {
-    const { data } = await supabase.from('bots').select('id, name')
-    return new Map<string, string>((data || []).map((b: { id: string; name: string }) => [b.id, b.name]))
-  }, [supabase])
-
   const fetchLogs = useCallback(async () => {
     setIsLoading(true)
+    setLogsError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        console.error('No user found')
-        return
+        throw new Error('Please sign in again')
       }
-      const botNames = await loadBotNames()
 
       const { data, error } = await supabase
         .from('logs')
@@ -64,7 +98,6 @@ export default function DashboardPage() {
         .limit(100)
 
       if (error) {
-        console.error('Supabase error:', error)
         throw error
       }
 
@@ -78,13 +111,12 @@ export default function DashboardPage() {
         details: log.details
       })))
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch logs'
-      console.error('Error fetching logs:', message)
+      setLogsError(friendlyError(error, 'We could not load your activity logs. Please try again.'))
       setLogs([])
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, loadBotNames])
+  }, [supabase, botNames])
 
   const fetchTrades = useCallback(async () => {
     setIsLoadingTrades(true)
@@ -94,7 +126,6 @@ export default function DashboardPage() {
       if (!user) {
         throw new Error('Please sign in again')
       }
-      const botNames = await loadBotNames()
 
       // Fetch trades from database
       const { data: dbTrades, error } = await supabase
@@ -119,7 +150,6 @@ export default function DashboardPage() {
         .limit(100)
 
       if (error) {
-        console.error('Supabase error:', error)
         throw error
       }
 
@@ -142,7 +172,7 @@ export default function DashboardPage() {
         .limit(100)
 
       if (simError) {
-        console.error('Supabase error:', simError)
+        throw simError
       }
 
       // Process database trades
@@ -182,14 +212,12 @@ export default function DashboardPage() {
       // Combine both types of trades
       setTrades([...formattedDbTrades, ...simTrades])
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch trades'
-      console.error('Error fetching trades:', message)
-      setTradesError('Unable to load your positions. Check your connection and try again.')
+      setTradesError(friendlyError(error, 'We could not load your trades and positions. Please try again.'))
       setTrades([])
     } finally {
       setIsLoadingTrades(false)
     }
-  }, [supabase, loadBotNames])
+  }, [supabase, botNames])
 
   useEffect(() => {
     fetchLogs()
@@ -201,14 +229,13 @@ export default function DashboardPage() {
   const activeTrades = split.liveTrades.filter(t => t.status === 'open' || t.status === 'pending').length
   const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(2)}`
 
+  const tradesUnavailable = isLoadingTrades || !!tradesError
   const kpiCls = 'bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-sm'
   const sections = [
     { id: 'positions', label: 'Positions' },
     { id: 'trades', label: 'Trades' },
     { id: 'strategies', label: 'Paper strategies' },
-    { id: 'insights', label: 'Insights' },
     { id: 'logs', label: 'Logs' },
-    { id: 'market', label: 'Market' },
   ]
 
   return (
@@ -238,10 +265,10 @@ export default function DashboardPage() {
 
         {/* KPIs: live (real money) and paper (simulated) never mixed */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="kpis">
-          <StatsCard title="Live P&L (24h)" value={money(split.live.pnl24h)} description={`Real orders · ${split.live.trades} trades`} className={`${kpiCls} ring-1 ring-rose-500/30`} />
-          <StatsCard title="Paper P&L (24h)" value={money(split.paper.pnl24h)} description={`Simulated · ${split.paper.trades} trades`} className={`${kpiCls} ring-1 ring-amber-400/30`} />
-          <StatsCard title="Open live positions" value={activeTrades.toString()} className={kpiCls} />
-          <StatsCard title="Total trades" value={`${split.live.trades} live · ${split.paper.trades} paper`} className={kpiCls} />
+          <StatsCard title="Live P&L (24h)" value={tradesUnavailable ? '—' : money(split.live.pnl24h)} description={tradesUnavailable ? 'Awaiting trade data' : `Real orders · ${split.live.trades} trades`} className={`${kpiCls} ring-1 ring-rose-500/30`} />
+          <StatsCard title="Paper P&L (24h)" value={tradesUnavailable ? '—' : money(split.paper.pnl24h)} description={tradesUnavailable ? 'Awaiting trade data' : `Simulated · ${split.paper.trades} trades`} className={`${kpiCls} ring-1 ring-amber-400/30`} />
+          <StatsCard title="Open live positions" value={tradesUnavailable ? '—' : activeTrades.toString()} className={kpiCls} />
+          <StatsCard title="Total trades" value={tradesUnavailable ? '—' : `${split.live.trades} live · ${split.paper.trades} paper`} className={kpiCls} />
         </div>
 
         <section id="positions" className="scroll-mt-20"><ActivePositions trades={split.liveTrades} loading={isLoadingTrades} error={tradesError} onRetry={fetchTrades} /></section>
@@ -253,14 +280,12 @@ export default function DashboardPage() {
               <CardDescription className="text-gray-600 dark:text-gray-300">Live and paper, labelled per row</CardDescription>
             </CardHeader>
             <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
-              <TradesTable trades={trades} isLoading={isLoadingTrades} onRefresh={fetchTrades} />
+              <TradesTable error={tradesError} trades={trades} isLoading={isLoadingTrades} onRefresh={fetchTrades} />
             </CardContent>
           </Card>
         </section>
 
         <section id="strategies" className="scroll-mt-20"><PaperStrategies /></section>
-
-        <section id="insights" className="scroll-mt-20"><TradingInsights trades={split.liveTrades} /></section>
 
         <section id="logs" className="scroll-mt-20">
           <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg">
@@ -269,12 +294,15 @@ export default function DashboardPage() {
               <CardDescription className="text-gray-600 dark:text-gray-300">Recent bot activity and order operations</CardDescription>
             </CardHeader>
             <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
-              <LogsTable logs={logs} isLoading={isLoading} onRefresh={fetchLogs} />
+              <LogsTable error={logsError} logs={logs} isLoading={isLoading} onRefresh={fetchLogs} />
             </CardContent>
           </Card>
         </section>
 
-        <section id="market" className="scroll-mt-20"><MarketOverview /></section>
+        <section className="space-y-4">
+          <Button variant="secondary" aria-expanded={showInsights} aria-controls="dashboard-insights" onClick={() => setShowInsights(value => !value)}>{showInsights ? 'Hide insights and market' : 'Show insights and market'}</Button>
+          {showInsights && <div id="dashboard-insights" className="space-y-4"><TradingInsights trades={split.liveTrades} /><MarketOverview /></div>}
+        </section>
       </div>
     </main>
   )
