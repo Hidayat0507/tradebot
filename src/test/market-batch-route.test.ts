@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
+import { ApiError } from '@/app/api/_middleware/api-handler'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), create: vi.fn(), detail: vi.fn() }))
 vi.mock('@/lib/public-tickers', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/public-tickers')>(), publicTickers: { get: mocks.get },
@@ -21,6 +22,13 @@ describe('market batch endpoint', () => {
   it.each([null, {}, { exchange: 'bitget', symbols: [] }, { exchange: 'bitget', symbols: 'BTC/USDT' }, { exchange: 'other', symbols: ['BTC/USDT'] }])('rejects invalid batch payloads', async body => {
     expect((await post(body)).status).toBe(400)
     expect(mocks.get).not.toHaveBeenCalled()
+  })
+  it.each(['initialization', 'detail'])('preserves 429 during single-symbol %s', async stage => {
+    mocks.create.mockResolvedValue({ id: 'bitget' })
+    mocks.detail.mockResolvedValue({ symbol: 'BTC/USDT' })
+    const failing = stage === 'initialization' ? mocks.create : mocks.detail
+    failing.mockRejectedValueOnce(new ApiError('Exchange rate limit hit', 429))
+    expect((await post({ exchange: 'bitget', symbol: 'BTC/USDT' })).status).toBe(429)
   })
   it('retains the single-symbol detail response', async () => {
     mocks.create.mockResolvedValue({ id: 'bitget' })

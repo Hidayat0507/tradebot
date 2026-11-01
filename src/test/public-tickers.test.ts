@@ -56,6 +56,23 @@ describe('batched public tickers', () => {
     expect(rows).toHaveLength(3)
     expect(rows[1]).toMatchObject({ error: true })
   })
+  it.each([true, false])('caps upstream calls across distinct batches and service instances (native=%s)', async native => {
+    let active = 0, peak = 0
+    const upstream = async () => {
+      active++; peak = Math.max(peak, active)
+      await new Promise(resolve => setTimeout(resolve, 1))
+      active--
+    }
+    const create = async () => ({
+      has: { fetchTickers: native },
+      fetchTickers: async () => { await upstream(); return ticks },
+      fetchTicker: async (symbol: string) => { await upstream(); return ticks[symbol] },
+    })
+    const services = [createPublicTickerService(create), createPublicTickerService(create)]
+    await Promise.all(services.flatMap(service => symbols.map(symbol => service.get('bitget', [symbol]))))
+    expect(peak).toBe(2)
+    expect(active).toBe(0)
+  })
   it('preserves 429, never fans out after batch failure, and permits retry', async () => {
     const fetchTickers = vi.fn().mockRejectedValueOnce(new ccxt.DDoSProtection('429')).mockResolvedValue(ticks)
     const fetchTicker = vi.fn()

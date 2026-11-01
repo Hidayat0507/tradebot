@@ -1,3 +1,4 @@
+import { publicMarketLimit } from '@/lib/concurrency'
 import * as ccxt from 'ccxt'
 import { ApiError } from '@/app/api/_middleware/api-handler'
 import { createExchangeClient } from '@/app/api/_middleware/exchange-middleware'
@@ -40,14 +41,14 @@ export function createPublicTickerService(
       pending = (async () => {
         let clientPromise = clients.get(request.exchange)
         if (!clientPromise) {
-          clientPromise = Promise.resolve().then(() => createClient(request.exchange))
+          clientPromise = publicMarketLimit(() => createClient(request.exchange))
           clients.set(request.exchange, clientPromise)
           clientPromise.catch(() => clients.delete(request.exchange))
         }
         const client = await clientPromise
         let tickers: Record<string, TickerResult>
         if (client.has?.fetchTickers === true && client.fetchTickers) {
-          tickers = await client.fetchTickers(sorted)
+          tickers = await publicMarketLimit(() => client.fetchTickers!(sorted))
         } else {
           // Adapters without a native batch endpoint get at most two concurrent calls.
           tickers = {}
@@ -55,7 +56,7 @@ export function createPublicTickerService(
           await Promise.all(Array.from({ length: Math.min(2, sorted.length) }, async () => {
             while (cursor < sorted.length) {
               const symbol = sorted[cursor++]
-              try { tickers[symbol] = await client.fetchTicker(symbol) }
+              try { tickers[symbol] = await publicMarketLimit(() => client.fetchTicker(symbol)) }
               catch (error) { if (!(error instanceof ccxt.BadSymbol)) throw error }
             }
           }))

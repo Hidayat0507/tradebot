@@ -1,13 +1,14 @@
+import { publicMarketLimit } from '@/lib/concurrency'
 import { publicTickers, validateTickerRequest } from '@/lib/public-tickers'
 import { NextRequest } from 'next/server'
 import { ApiError } from '@/app/api/_middleware/api-handler'
-import { 
+import {
   getAuthenticatedUser,
   handleApiError,
   successResponse,
   validateFields
 } from '@/app/api/_middleware/api-handler'
-import { 
+import {
   createExchangeClient,
   fetchMarketData
 } from '@/app/api/_middleware/exchange-middleware'
@@ -38,8 +39,10 @@ export async function GET(request: NextRequest) {
       .filter(bot => ['bitget'].includes(bot.exchange.toLowerCase()))
       .map(async (bot) => {
         try {
-          const exchange_client = await createExchangeClient(bot.exchange, undefined, 'market_data')
-          const marketData = await fetchMarketData(exchange_client, bot.pair)
+          const marketData = await publicMarketLimit(async () => {
+            const client = await createExchangeClient(bot.exchange, undefined, 'market_data')
+            return fetchMarketData(client, bot.pair)
+          })
           
           return {
             bot_id: bot.id,
@@ -101,11 +104,11 @@ export async function POST(request: NextRequest) {
     
     logger.info('Market data request', { exchange, symbol })
     
-    // Create exchange client for public data (no credentials needed)
-    const exchange_client = await createExchangeClient('bitget', undefined, 'market_data')
-    
     try {
-      const marketData = await fetchMarketData(exchange_client, symbol)
+      const marketData = await publicMarketLimit(async () => {
+        const client = await createExchangeClient('bitget', undefined, 'market_data')
+        return fetchMarketData(client, symbol)
+      })
       return successResponse(marketData)
     } catch (error) {
       // If it's a BadSymbol error, return a 200 response with error info
