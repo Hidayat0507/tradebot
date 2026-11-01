@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [trades, setTrades] = useState<TradeEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [tradesError, setTradesError] = useState<string | null>(null)
   const [isLoadingTrades, setIsLoadingTrades] = useState(true)
   const supabase = createClient()
 
@@ -87,11 +88,11 @@ export default function DashboardPage() {
 
   const fetchTrades = useCallback(async () => {
     setIsLoadingTrades(true)
+    setTradesError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        console.error('No user found')
-        return
+        throw new Error('Please sign in again')
       }
       const botNames = await loadBotNames()
 
@@ -183,6 +184,7 @@ export default function DashboardPage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to fetch trades'
       console.error('Error fetching trades:', message)
+      setTradesError('Unable to load your positions. Check your connection and try again.')
       setTrades([])
     } finally {
       setIsLoadingTrades(false)
@@ -242,7 +244,7 @@ export default function DashboardPage() {
           <StatsCard title="Total trades" value={`${split.live.trades} live · ${split.paper.trades} paper`} className={kpiCls} />
         </div>
 
-        <section id="positions" className="scroll-mt-20"><ActivePositions trades={split.liveTrades} /></section>
+        <section id="positions" className="scroll-mt-20"><ActivePositions trades={split.liveTrades} loading={isLoadingTrades} error={tradesError} onRetry={fetchTrades} /></section>
 
         <section id="trades" className="scroll-mt-20">
           <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg">

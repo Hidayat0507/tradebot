@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchLivePrices, STABLECOINS } from '@/lib/asset-prices';
+
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { createClient } from '@/utils/supabase/client';
@@ -45,36 +47,20 @@ interface Bot {
   pair: string;
 }
 
-interface BotBalance {
-  botId: string;
-  balance: Record<string, { total: number; free: number; used: number }>;
-  usdValue: number;
-  loading: boolean;
-  error: string | null;
+interface CurrencyBalance {
+  total: number;
+  free: number;
+  used: number;
+  priceUsd: number | null;
 }
 
-// Simple crypto price API - using CoinGecko as fallback
-const CRYPTO_PRICES: Record<string, number> = {
-  'BTC': 50000,
-  'ETH': 3000,
-  'BNB': 300,
-  'SOL': 100,
-  'XRP': 0.5,
-  'ADA': 0.3,
-  'USDT': 1,
-  'USDC': 1,
-  'BUSD': 1,
-  'DAI': 1,
-};
-
-async function fetchCryptoPrice(symbol: string): Promise<number> {
-  // Return cached price if available
-  if (CRYPTO_PRICES[symbol.toUpperCase()]) {
-    return CRYPTO_PRICES[symbol.toUpperCase()];
-  }
-  
-  // For unknown crypto, return 0 (or could fetch from API)
-  return 0;
+interface BotBalance {
+  botId: string;
+  balance: Record<string, CurrencyBalance>;
+  usdValue: number;
+  hasUnavailablePrice: boolean;
+  loading: boolean;
+  error: string | null;
 }
 
 export default function AssetsPage() {
@@ -104,18 +90,20 @@ export default function AssetsPage() {
     }
   }, [supabase]);
 
-  const fetchBotBalance = useCallback(async (botId: string) => {
+  const fetchBotBalance = useCallback(async (bot: Bot) => {
+    const botId = bot.id;
     // Create AbortController for timeout handling
     const controller = new AbortController();
     let timeoutId: NodeJS.Timeout | undefined = undefined;
 
     try {
       timeoutId = setTimeout(() => controller.abort(), 18000); // 18 second timeout (before Vercel's 20s limit)
-      
+
       setBalances(prev => new Map(prev).set(botId, {
         botId,
         balance: {},
         usdValue: 0,
+        hasUnavailablePrice: false,
         loading: true,
         error: null
       }));
@@ -142,33 +130,50 @@ export default function AssetsPage() {
           botId,
           balance: {},
           usdValue: 0,
+          hasUnavailablePrice: false,
           loading: false,
           error: null
         }));
         return;
       }
 
-      // Format balance
-      const formatted: Record<string, { total: number; free: number; used: number }> = {};
+      // Format balance and figure out which currencies need a live price
+      const formatted: Record<string, CurrencyBalance> = {};
+      const currenciesNeedingPrice: string[] = [];
       for (const currency of Object.keys(balanceData.total)) {
+        const total = balanceData.total?.[currency] ?? 0;
         formatted[currency] = {
-          total: balanceData.total?.[currency] ?? 0,
+          total,
           free: balanceData.free?.[currency] ?? 0,
-          used: balanceData.used?.[currency] ?? 0
+          used: balanceData.used?.[currency] ?? 0,
+          priceUsd: null,
         };
+        if (total > 0) {
+          currenciesNeedingPrice.push(currency);
+        }
       }
 
-      // Calculate USD value
+      const livePrices = await fetchLivePrices(bot.exchange, currenciesNeedingPrice);
+      for (const currency of currenciesNeedingPrice) {
+        formatted[currency].priceUsd = livePrices[currency] ?? null;
+      }
+
+      // Calculate USD value from whatever prices resolved; flag the rest as unavailable
       let totalUsdValue = 0;
-      for (const [currency, data] of Object.entries(formatted)) {
-        const price = await fetchCryptoPrice(currency);
-        totalUsdValue += data.total * price;
+      let hasUnavailablePrice = false;
+      for (const data of Object.values(formatted)) {
+        if (data.priceUsd === null) {
+          if (data.total > 0) hasUnavailablePrice = true;
+          continue;
+        }
+        totalUsdValue += data.total * data.priceUsd;
       }
 
       setBalances(prev => new Map(prev).set(botId, {
         botId,
         balance: formatted,
         usdValue: totalUsdValue,
+        hasUnavailablePrice,
         loading: false,
         error: null
       }));
@@ -179,6 +184,7 @@ export default function AssetsPage() {
           botId,
           balance: {},
           usdValue: 0,
+          hasUnavailablePrice: false,
           loading: false,
           error: 'Request timeout - exchange may be slow or unreachable'
         }));
@@ -188,6 +194,7 @@ export default function AssetsPage() {
           botId,
           balance: {},
           usdValue: 0,
+          hasUnavailablePrice: false,
           loading: false,
           error: message
         }));
@@ -205,7 +212,7 @@ export default function AssetsPage() {
 
   useEffect(() => {
     if (bots.length > 0) {
-      bots.forEach(bot => fetchBotBalance(bot.id));
+      bots.forEach(bot => fetchBotBalance(bot));
     }
   }, [bots, fetchBotBalance]);
 
@@ -213,7 +220,7 @@ export default function AssetsPage() {
     setRefreshing(true);
     await fetchBots();
     if (bots.length > 0) {
-      await Promise.all(bots.map(bot => fetchBotBalance(bot.id)));
+      await Promise.all(bots.map(bot => fetchBotBalance(bot)));
     }
     setRefreshing(false);
   }, [fetchBots, fetchBotBalance, bots]);
@@ -231,6 +238,7 @@ export default function AssetsPage() {
   // Calculate stats
   const stats = useMemo(() => {
     const totalValue = Array.from(balances.values()).reduce((sum, b) => sum + b.usdValue, 0);
+    const hasUnavailablePrice = Array.from(balances.values()).some(b => b.hasUnavailablePrice);
     const uniqueAssets = new Set<string>();
     balances.forEach(b => {
       Object.keys(b.balance).forEach(asset => uniqueAssets.add(asset));
@@ -239,6 +247,7 @@ export default function AssetsPage() {
 
     return {
       totalValue,
+      hasUnavailablePrice,
       totalAssets: uniqueAssets.size,
       totalExchanges: uniqueExchanges.size,
     };
@@ -348,10 +357,12 @@ export default function AssetsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {stats.hasUnavailablePrice ? '~' : ''}${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Across all exchanges
+                {stats.hasUnavailablePrice
+                  ? 'Estimated from live USDT/USDC quotes; some prices unavailable, so this total is incomplete'
+                  : 'Estimated USD value from live USDT/USDC quotes'}
               </p>
             </CardContent>
           </Card>
@@ -473,15 +484,18 @@ export default function AssetsPage() {
                                   .slice(0, 3)
                                   .map(([currency, data]) => {
                                     // Format stablecoins with 2 decimals, other crypto with 4
-                                    const isStablecoin = ['USDT', 'USDC', 'BUSD', 'DAI', 'USDD', 'TUSD', 'USDP'].includes(currency.toUpperCase());
-                                    const formattedAmount = isStablecoin 
+                                    const isStablecoin = STABLECOINS.has(currency.toUpperCase());
+                                    const formattedAmount = isStablecoin
                                       ? data.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                       : data.total.toFixed(4);
-                                    
+
                                     return (
                                       <div key={currency} className="text-sm">
                                         <span className="font-medium">{currency}:</span>{' '}
                                         {formattedAmount}
+                                        {data.priceUsd === null && (
+                                          <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">(price unavailable)</span>
+                                        )}
                                       </div>
                                     );
                                   })}
@@ -497,12 +511,17 @@ export default function AssetsPage() {
                             {botBalance?.loading ? (
                               <Skeleton className="h-4 w-20 ml-auto" />
                             ) : (
-                              <span className="text-green-600">
-                                ${botBalance?.usdValue.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 2, 
-                                  maximumFractionDigits: 2 
-                                })}
-                              </span>
+                              <div className="space-y-0.5">
+                                <span className="text-green-600">
+                                  {botBalance?.hasUnavailablePrice ? '~' : ''}${botBalance?.usdValue.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </span>
+                                {botBalance?.hasUnavailablePrice && (
+                                  <div className="text-xs font-normal text-amber-600 dark:text-amber-400">Some prices unavailable</div>
+                                )}
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>
