@@ -137,6 +137,7 @@ export function validateBotData(data: Record<string, unknown>) {
  * Standard success response
  */
 export function successResponse(data: unknown = null, status: number = 200) {
+  if (status === 204) return new NextResponse(null, { status })
   return NextResponse.json({
     success: true,
     data

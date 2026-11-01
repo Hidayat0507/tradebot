@@ -34,7 +34,7 @@ function webhook(secret = 'correct', bot = 'bot', address = `test-${++ip}`) {
       ts: new Date().toISOString(), alert_id: `a-${ip}` }) })
 }
 const bot = { id: 'bot', exchange: 'bitget', api_key: 'test', api_secret: 'encrypted',
-  webhook_secret: 'correct', enabled: true, user_id: 'user', name: 'test' }
+  webhook_secret: 'correct', enabled: true, user_id: 'user', name: 'test', pair: 'BTC/USDT' }
 
 beforeEach(() => {
   vi.clearAllMocks()
