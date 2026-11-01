@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError } from '@/lib/friendly-error'
 import { botStatusLabel } from '@/lib/format'
 import { useState, useEffect } from 'react'
 import { useParams } from "next/navigation"
@@ -50,8 +51,7 @@ export default function BotDetailsPage() {
 
         setBot(data)
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to fetch bot'
-        console.error('Failed to fetch bot:', err)
+        const message = friendlyError(err, 'We could not load this bot. Refresh the page and try again.')
         setError(message)
       } finally {
         setLoading(false)
@@ -77,7 +77,7 @@ export default function BotDetailsPage() {
       <div className="page-background">
         <div className="page-container">
           <div className="page-content">
-            <div className="text-red-500">Bot not found</div>
+            <div role="alert" className="text-red-500">{error ?? 'This bot is no longer available. Return to your bots and try again.'}</div>
           </div>
         </div>
       </div>

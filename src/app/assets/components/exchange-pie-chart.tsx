@@ -1,3 +1,4 @@
+import { friendlyError } from '@/lib/friendly-error'
 import { fetchLivePrices } from '@/lib/asset-prices';
 import React, { useEffect, useState } from 'react';
 import { Pie } from 'react-chartjs-2';
@@ -85,7 +86,7 @@ export default function ExchangePieChart({ bots }: { bots: BotForChart[] }) {
 
         setExchangeBalances(balances);
       } catch (err: any) {
-        setError(err.message || 'Failed to fetch balances');
+        setError(friendlyError(err, 'We could not load exchange balances. Please try again.'));
       } finally {
         setLoading(false);
       }

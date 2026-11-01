@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError } from '@/lib/friendly-error'
 import { createClient } from '@/utils/supabase/client'
 
 type AuthResponse = 
@@ -17,7 +18,7 @@ export async function signInWithGoogle(): Promise<AuthResponse> {
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: friendlyError(error, 'We could not sign you in with Google. Please try again.') }
   }
 
   return { success: true }
@@ -39,7 +40,7 @@ export async function login(formData: FormData): Promise<AuthResponse> {
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: friendlyError(error, 'We could not sign you in. Check your email and password, then try again.') }
   }
 
   return { success: true }
@@ -69,7 +70,7 @@ export async function signup(formData: FormData): Promise<AuthResponse> {
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: friendlyError(error, 'We could not create your account. Please try again.') }
   }
 
   return { 

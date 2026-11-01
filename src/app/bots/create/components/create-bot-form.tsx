@@ -1,4 +1,5 @@
 'use client'
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
 import { formatBotUsage } from '@/lib/format'
 import { ORDER_SIZE } from '@/lib/bot-config'
 import { WebhookExample } from '@/components/bot/WebhookExample'
@@ -66,6 +67,7 @@ type CreateBotFormValues = z.infer<typeof createBotFormSchema>
 
 export function CreateBotForm() {
   const router = useRouter()
+  const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -111,7 +113,7 @@ export function CreateBotForm() {
           setBotLimit(limit)
           setPlan(planName)
         } else if (subscriptionPayload?.error) {
-          setLimitWarning(subscriptionPayload.error)
+          setLimitWarning(friendlyError(requestFailure(subscriptionResponse.status), 'We could not check your plan limits. Refresh the page before creating a bot.'))
         }
 
         const { count, error: countError } = await supabase
@@ -124,14 +126,19 @@ export function CreateBotForm() {
 
         setCurrentBotCount(typeof count === 'number' && Number.isFinite(count) ? count : null)
       } catch (err) {
-        console.error('Failed to load bot usage limits', err)
-        const message = err instanceof Error ? err.message : 'Unable to load bot usage limits'
+        const message = friendlyError(err, 'We could not check your plan limits. Refresh the page before creating a bot.')
         setLimitWarning(message)
       }
     }
 
     loadUsage()
   }, [supabase])
+
+  async function nextStep() {
+    const fields: (keyof CreateBotFormValues)[] = step === 1
+      ? ['name', 'exchange', 'pair'] : ['max_position_size', 'stoploss_percentage']
+    if (await form.trigger(fields, { shouldFocus: true })) setStep(current => Math.min(3, current + 1))
+  }
 
   async function onSubmit(values: CreateBotFormValues) {
     try {
@@ -172,7 +179,7 @@ export function CreateBotForm() {
       })
       const creation = await creationResponse.json()
       if (!creationResponse.ok || !creation.success) {
-        throw new Error(creation.error || 'Failed to create bot')
+        throw requestFailure(creationResponse.status)
       }
       const botId = creation.data.id
       const webhookSecretPlaintext = creation.data.webhook_secret
@@ -192,7 +199,6 @@ export function CreateBotForm() {
         body: JSON.stringify(requestBody),
       })
 
-      console.log('Response status:', response.status)
       
       try {
         const data = await response.json()
@@ -201,7 +207,7 @@ export function CreateBotForm() {
           // If validation fails, delete the bot we just created
           await supabase.from('bots').delete().eq('id', botId)
           
-          setValidationError(data.error || 'Failed to validate exchange credentials')
+          setValidationError(friendlyError(requestFailure(response.status), 'We could not connect your exchange. Check the key, secret, permissions and passphrase, then try again.'))
           setValidationSuccess(null)
           setIsSubmitting(false)
           return
@@ -217,14 +223,12 @@ export function CreateBotForm() {
         // If something goes wrong, delete the bot we just created
         await supabase.from('bots').delete().eq('id', botId)
         
-        console.error('Error validating credentials:', error)
-        setError(error.message || 'An unexpected error occurred')
+        setError(friendlyError(error, 'We could not check your exchange connection. Please try again.'))
       } finally {
         setIsSubmitting(false)
       }
     } catch (error: any) {
-      console.error('Error creating bot:', error)
-      setError(error.message || 'An unexpected error occurred')
+      setError(friendlyError(error, 'We could not create your bot. Please try again.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -292,12 +296,26 @@ export function CreateBotForm() {
       )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="space-y-4">
+        <form onSubmit={(event) => {
+          if (step < 3) { event.preventDefault(); void nextStep(); return }
+          void form.handleSubmit(onSubmit, (errors) => {
+            if (errors.name || errors.exchange || errors.pair) setStep(1)
+            else if (errors.max_position_size || errors.stoploss_percentage) setStep(2)
+          })(event)
+        }} className="space-y-6">
+          <ol aria-label="Create bot progress" className="grid grid-cols-3 gap-2 text-sm">
+            {['Bot basics', 'Risk settings', 'Connect exchange'].map((label, index) => (
+              <li key={label} aria-current={step === index + 1 ? 'step' : undefined} className={`rounded-lg border p-2 ${step === index + 1 ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}>
+                {index + 1}. {label}
+              </li>
+            ))}
+          </ol>
+          <fieldset hidden={step !== 1} className="space-y-4">
+            <legend className="sr-only">Bot basics</legend>
             <div>
-              <h3 className="text-lg font-semibold mb-2">Bot Configuration</h3>
+              <h3 className="text-lg font-semibold mb-2">1. Bot basics</h3>
               <p className="text-sm text-gray-500">
-                Configure your trading bot settings.
+                Choose a name, exchange and trading pair. Your bot will be created paused.
               </p>
             </div>
 
@@ -371,6 +389,10 @@ export function CreateBotForm() {
               )}
             />
 
+          </fieldset>
+          <fieldset hidden={step !== 2} className="space-y-4">
+            <legend className="text-lg font-semibold">2. Risk settings</legend>
+            <p className="text-sm text-gray-500">Decide how much balance each order can use. Examples below are illustrative, not your account balance.</p>
             <FormField
               control={form.control}
               name="max_position_size"
@@ -391,6 +413,7 @@ export function CreateBotForm() {
                   </FormControl>
                   <FormDescription>
                     {ORDER_SIZE.help}
+                    {Number.isFinite(form.watch('max_position_size')) && <> For example, {form.watch('max_position_size')}% of an available 1,000 USDT balance is {(form.watch('max_position_size') * 10).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT per buy order, before fees. This is order size, not a limit on total losses.</>}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -402,7 +425,7 @@ export function CreateBotForm() {
               name="stoploss_percentage"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Stoploss Percentage</FormLabel>
+                  <FormLabel>Stop-loss (%)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -418,13 +441,23 @@ export function CreateBotForm() {
                     />
                   </FormControl>
                   <FormDescription>
-                    Optional: Set a stoploss percentage (e.g., 5 for 5%)
+                    Optional: a 5% stop-loss on a buy at $100 targets an exit around $95. This saved setting alone does not place a stop order: your TradingView alert must include stoplossPercent and your exchange must support it. Actual execution can differ; losses are not guaranteed to stop at this amount.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+          </fieldset>
+          <fieldset hidden={step !== 3} className="space-y-4">
+            <legend className="text-lg font-semibold">3. Connect your exchange</legend>
+            <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
+              {isHyperliquid ? (
+                <p>Open the API section in Hyperliquid to create and authorize a dedicated API wallet. Enter your trading account&apos;s public address below and the API wallet&apos;s private key in the next field. <a className="text-blue-500 underline" href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#approve-an-api-wallet" target="_blank" rel="noopener noreferrer">Hyperliquid API wallet guide</a></p>
+              ) : (
+                <p>Sign in to Bitget and open API Key Management. Create a system-generated key, save its secret and the passphrase you choose, then enter all three below. Enable Read and Trade permissions for trading; leave Withdraw and Transfer disabled. <a className="text-blue-500 underline" href="https://www.bitget.com/docs/classic/rest-api" target="_blank" rel="noopener noreferrer">Bitget API key guide</a></p>
+              )}
+            </div>
             <FormField
               control={form.control}
               name="api_key"
@@ -529,9 +562,11 @@ export function CreateBotForm() {
                 )}
               />
             )}
-          </div>
+          </fieldset>
 
-          <Button
+          <div className="flex flex-wrap gap-3">
+          {step > 1 && <Button type="button" variant="secondary" disabled={isSubmitting} onClick={() => setStep(step - 1)}>Back</Button>}
+          {step < 3 ? <Button type="button" onClick={() => void nextStep()}>Continue</Button> : <Button
             type="submit"
             disabled={
               isSubmitting ||
@@ -539,7 +574,8 @@ export function CreateBotForm() {
             }
           >
             {isSubmitting ? 'Creating Bot...' : 'Create Bot'}
-          </Button>
+          </Button>}
+          </div>
         </form>
       </Form>
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
 import { useEffect, useState } from 'react'
 
 interface Balance {
@@ -24,12 +25,12 @@ export default function AccountBalance({ className }: AccountBalanceProps) {
         const data = await response.json()
 
         if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch balance')
+          throw requestFailure(response.status)
         }
 
         setBalances(data.balance || {})
       } catch (err: any) {
-        setError(err.message)
+        setError(friendlyError(err, 'We could not load your balance. Please try again.'))
       } finally {
         setIsLoading(false)
       }

@@ -1,5 +1,8 @@
 "use client";
 
+import { EmptyState } from '@/components/empty-state'
+import { friendlyError, requestFailure } from '@/lib/friendly-error'
+
 import { fetchLivePrices, STABLECOINS } from '@/lib/asset-prices';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -83,7 +86,7 @@ export default function AssetsPage() {
       if (error) throw error;
       setBots(data || []);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load bots'
+      const message = friendlyError(err, 'We could not load your portfolio. Please try again.')
       setError(message)
     } finally {
       setLoading(false);
@@ -115,7 +118,7 @@ export default function AssetsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch balance');
+        throw requestFailure(response.status);
       }
 
       const payload = await response.json();
@@ -186,10 +189,10 @@ export default function AssetsPage() {
           usdValue: 0,
           hasUnavailablePrice: false,
           loading: false,
-          error: 'Request timeout - exchange may be slow or unreachable'
+          error: friendlyError(err)
         }));
       } else {
-        const message = err instanceof Error ? err.message : 'Failed to fetch balance';
+        const message = friendlyError(err, 'We could not load this balance. Check your exchange connection and try again.');
         setBalances(prev => new Map(prev).set(botId, {
           botId,
           balance: {},
@@ -301,25 +304,7 @@ export default function AssetsPage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
-          <Card>
-            <CardContent className="pt-12 pb-12">
-              <div className="text-center">
-                <div className="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                  <Wallet className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">No Bots Connected</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">
-                  Connect your first trading bot to start tracking your portfolio
-                </p>
-                <Button asChild>
-                  <Link href="/bots/create">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Your First Bot
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <EmptyState title="Create your first bot" description="Connect your exchange to start tracking your balances and portfolio here." createBot />
         </div>
       </main>
     );

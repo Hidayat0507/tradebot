@@ -1,5 +1,7 @@
 'use client'
 
+import { EmptyState } from '@/components/empty-state'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import {
@@ -33,12 +35,13 @@ export type LogEntry = {
 }
 
 interface LogsTableProps {
+  error?: string | null
   logs: LogEntry[]
   isLoading?: boolean
   onRefresh?: () => void
 }
 
-export default function LogsTable({ logs, isLoading, onRefresh }: LogsTableProps) {
+export default function LogsTable({ logs, isLoading, onRefresh, error }: LogsTableProps) {
   const [filter, setFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
 
@@ -94,7 +97,10 @@ export default function LogsTable({ logs, isLoading, onRefresh }: LogsTableProps
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+      {isLoading ? <p role="status" className="py-6 text-center text-sm">Loading activity logs…</p>
+        : !error && filteredLogs.length === 0 ? <EmptyState title={logs.length ? 'No matching logs' : 'No activity yet'} description={logs.length ? 'Try a different search or log type.' : 'Activity will appear here when your bots receive alerts.'} />
+        : !error && <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -137,7 +143,7 @@ export default function LogsTable({ logs, isLoading, onRefresh }: LogsTableProps
             )}
           </TableBody>
         </Table>
-      </div>
+      </div>}
     </div>
   )
 }

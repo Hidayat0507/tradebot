@@ -1,5 +1,7 @@
 'use client'
 
+import { EmptyState } from '@/components/empty-state'
+import { friendlyError } from '@/lib/friendly-error'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
@@ -30,8 +32,7 @@ export default function BotsPage() {
   const supabase = createClient()
 
   const handleError = useCallback((err: unknown) => {
-    console.error('Bots operation failed:', err)
-    const message = err instanceof Error ? err.message : 'Unexpected error'
+    const message = friendlyError(err, 'We could not update or load your bots. Please try again.')
     setError(message)
   }, [])
 
@@ -100,10 +101,13 @@ export default function BotsPage() {
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
-          {error}
+          <p role="alert">{error}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={loadBots}>Try again</Button>
         </div>
       )}
 
+      {!error && bots.length === 0 && <EmptyState title="Create your first bot" description="Choose a trading pair and connect your exchange. Your bot starts paused so you can review it first." createBot />}
+      {bots.length > 0 && <>
       <ul className="md:hidden space-y-3" aria-label="Bots">
         {bots.map(bot => (
           <li key={bot.id} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
@@ -186,6 +190,8 @@ export default function BotsPage() {
           </tbody>
         </table>
       </div>
+
+      </>}
 
       {/* Delete Confirmation Dialog */}
       {showDeleteDialog && (
