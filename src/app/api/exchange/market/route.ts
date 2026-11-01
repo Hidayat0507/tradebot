@@ -1,3 +1,4 @@
+import { publicTickers, validateTickerRequest } from '@/lib/public-tickers'
 import { NextRequest } from 'next/server'
 import { ApiError } from '@/app/api/_middleware/api-handler'
 import { 
@@ -74,7 +75,15 @@ export async function POST(request: NextRequest) {
   try {
     const payload = await request.json()
     
-    // Validate required fields
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new ApiError('Expected a market data request object', 400)
+    }
+    if ('symbols' in payload) {
+      const request = validateTickerRequest(payload.exchange, payload.symbols)
+      return successResponse(await publicTickers.get(request.exchange, request.symbols))
+    }
+
+    // The existing single-symbol detail response remains available.
     validateFields(payload, ['exchange', 'symbol'])
     
     const { exchange, symbol } = payload
