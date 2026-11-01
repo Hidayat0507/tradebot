@@ -20,8 +20,5 @@ export function createLimiter(max: number) {
   }) as typeof limit & { readonly active: number; readonly pending: number }
 }
 
-/** Map with bounded concurrency; returns settled results in input order. */
-export async function mapSettledLimit<T, R>(items: readonly T[], max: number, fn: (item: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
-  const limit = createLimiter(max)
-  return Promise.allSettled(items.map((item) => limit(() => fn(item))))
-}
+/** Shared cap across public batch tickers and single-symbol detail requests. */
+export const publicMarketLimit = createLimiter(2)

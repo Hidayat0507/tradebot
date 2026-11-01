@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { mapSettledLimit } from '@/lib/concurrency'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,18 +24,7 @@ interface MarketData {
   change_24h: number
   high_24h: number
   low_24h: number
-  order_book: {
-    bids: number[][]
-    asks: number[][]
-  }
-  ohlcv: {
-    timestamp: number
-    open: number
-    high: number
-    low: number
-    close: number
-    volume: number
-  }[]
+
 }
 
 // Predefined list of symbols to track - using Bitget
@@ -58,38 +46,18 @@ export default function MarketOverview() {
     async function fetchMarketData() {
       try {
         setIsLoading(true)
-        // At most 2 requests in flight; the server also caches + caps upstream calls (Bitget 429s)
-        const results = await mapSettledLimit(DEFAULT_SYMBOLS, 2, async ({ exchange, symbol }) => {
-          const response = await fetch('/api/exchange/market', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ exchange, symbol }),
-          })
-          if (!response.ok) throw new Error(`Failed to fetch ${symbol} data (${response.status})`)
-          const data = await response.json()
-          return data.success && !data.data?.error ? (data.data as MarketData) : null
+        const response = await fetch('/api/exchange/market', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exchange: 'bitget', symbols: DEFAULT_SYMBOLS.map(item => item.symbol) }),
         })
-        
-        const validData = results
-          .filter((result): result is PromiseFulfilledResult<MarketData> => 
-            result.status === 'fulfilled' && result.value !== null
-          )
-          .map(result => result.value)
-
-        // Since we are only fetching from Bitget, no need for unique map logic
-        // Take the top 6 symbols
-        const top6MarketData = validData.slice(0, 6);
-
-        // Keep the last good rows if this round got nothing (e.g. transient rate limit)
-        if (top6MarketData.length > 0) {
-          setMarketData(top6MarketData)
-          setError(null)
-        } else {
-          setMarketData((prev) => {
-            if (prev.length === 0) setError('Market data temporarily unavailable')
-            return prev
-          })
-        }
+        if (!response.ok) throw new Error(`Market request failed (${response.status})`)
+        const result = await response.json()
+        if (!result.success || !Array.isArray(result.data)) throw new Error('Invalid ticker response')
+        const validData = result.data.filter((row: MarketData & { error?: boolean }) => !row.error)
+        if (!validData.length) throw new Error('No tickers available')
+        setMarketData(validData.slice(0, 6))
+        setError(null)
       } catch (err) {
         setError('Failed to load market data')
         console.error(err)

@@ -8,6 +8,8 @@ export default defineConfig({
   envDir: mkdtempSync(path.join(tmpdir(), 'tradebot-test-env-')),
   test: {
     environment: 'node',
+    maxWorkers: 2,
+    minWorkers: 1,
     setupFiles: ['src/test/setup.ts'],
     include: ['src/test/**/*.test.ts'],
     // Credential-driven integration tests must never contact an exchange in this offline suite.
