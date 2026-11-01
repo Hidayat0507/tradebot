@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { SAMPLE_PINE } from '@/lib/strategy/samples'
 import { PUBLIC_EXCHANGES, TIMEFRAMES } from '@/lib/strategy/exchanges'
 import { friendlyPineError, SUPPORTED_PINE } from '@/lib/strategy/friendly-error'
+import { describeStrategy } from '@/lib/strategy/describe'
+import type { StrategyDefinition } from '@/lib/strategy/types'
 
 /** Shared dark-theme-safe field style (matches components/ui/input). */
 const FIELD = 'rounded-lg border border-gray-200 bg-gray-50 text-gray-900 placeholder:text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -201,6 +203,7 @@ export default function StrategyPage() {
             <Stat label="Candles" value={`${result.candleCount} (${result.candleSource})`} />
           </div>
           {result.warnings.map((w) => <p key={w} className="text-sm text-yellow-700">{w}</p>)}
+          <RuleSummary definition={result.definition} via={result.via} />
           {showAdvanced && (
             <details>
               <summary className="cursor-pointer text-sm font-medium">Strategy definition (via {result.via})</summary>
@@ -232,6 +235,32 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="rounded border p-3">
       <div className="text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
+    </div>
+  )
+}
+
+/** Plain-English rules, shown unconditionally (not behind "Advanced") so "review carefully"
+ * for AI-converted strategies has something a non-engineer can actually review. */
+function RuleSummary({ definition, via }: { definition: unknown; via: string }) {
+  let lines: string[] = []
+  try {
+    lines = describeStrategy(definition as StrategyDefinition)
+  } catch {
+    return null
+  }
+  if (!lines.length) return null
+  const isAi = via === 'ai'
+  return (
+    <div
+      data-testid="rule-summary"
+      className={`rounded-lg border p-3 text-sm ${isAi ? 'border-amber-400/50 bg-amber-400/10' : 'border-gray-700 bg-gray-900/30'}`}
+    >
+      <p className="font-medium text-gray-100">
+        {isAi ? 'AI-converted rules — review carefully before saving:' : 'Converted rules:'}
+      </p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-gray-200">
+        {lines.map((l, i) => <li key={i}>{l}</li>)}
+      </ul>
     </div>
   )
 }

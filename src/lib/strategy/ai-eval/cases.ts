@@ -103,4 +103,24 @@ var int n = 0
 n := n + 1
 if n % 10 == 0
     strategy.entry("L", strategy.long)` },
+  // Adversarial: "almost valid" scripts designed to tempt a sloppy AI into hallucinating a
+  // conversion that happens to pass validateDefinition(), instead of declining. See
+  // docs/pine-independence.md Phase 6b / design doc Section 4.
+  { id: 'reject-function-def', reject: true, pine: `//@version=5
+strategy("Custom fn")
+f(x) => x * 2
+val = f(close)
+if val > 100
+    strategy.entry("L", strategy.long)` },
+  { id: 'reject-library-import', reject: true, pine: `//@version=5
+strategy("Lib import")
+import TradingView/ta/7 as talib
+r = talib.rsi(close, 14)
+if r < 30
+    strategy.entry("L", strategy.long)` },
+  { id: 'reject-unsupported-indicator', reject: true, pine: `//@version=5
+strategy("PSAR")
+p = ta.sar(0.02, 0.02, 0.2)
+if close > p
+    strategy.entry("L", strategy.long)` },
 ]
