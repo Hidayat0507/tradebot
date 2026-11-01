@@ -1,7 +1,7 @@
 -- Durable replay claims. Only the server service role may write these rows.
 create table public.signals (
   id bigint generated always as identity primary key,
-  bot_id text not null references public.bots(id) on delete cascade,
+  bot_id uuid not null references public.bots(id) on delete cascade,
   alert_id text not null check (length(alert_id) between 1 and 256),
   ts timestamptz not null,
   created_at timestamptz not null default now(),

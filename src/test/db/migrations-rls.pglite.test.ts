@@ -32,8 +32,8 @@ beforeAll(async () => {
   }
   await db.exec(`
     insert into auth.users values ('${A}'), ('${B}');
-    insert into public.bots (id, user_id, name, exchange, pair) values
-      ('${BOT_A}', '${A}', 'a', 'binance', 'BTC/USDT'), ('${BOT_B}', '${B}', 'b', 'binance', 'ETH/USDT');
+    insert into public.bots (id, user_id, name, exchange, pair, max_position_size) values
+      ('${BOT_A}', '${A}', 'a', 'binance', 'BTC/USDT', 1), ('${BOT_B}', '${B}', 'b', 'binance', 'ETH/USDT', 1);
     insert into public.bot_strategies (bot_id, user_id, pine_source, definition) values ('${BOT_B}', '${B}', 'x', '{}');
     insert into public.trades (user_id, bot_id, external_id, symbol, side, status, size, price) values
       ('${A}', '${BOT_A}', 'paper-1', 'BTC/USDT', 'buy', 'filled', 1, 100),
@@ -47,9 +47,8 @@ describe('migrations apply on real Postgres', () => {
     expect(applied['20261031000300_bot_strategies_last_signal.sql']).toBeNull()
     expect(applied['20261031000100_bot_trading_mode.sql']).toBeNull()
   })
-  it('KNOWN ISSUE (main): signals.bot_id is text but bots.id is uuid → FK fails', () => {
-    // Documents a pre-existing bug in the merged webhook_signals migration (#5). Fix separately.
-    expect(applied['20261031000000_webhook_signals.sql']).toMatch(/foreign key constraint .* cannot be implemented/)
+  it('every migration applies in order on an empty application schema', () => {
+    expect(Object.values(applied)).toEqual(Object.keys(applied).map(() => null))
   })
   it('fix migration 20261031000400 creates signals with uuid bot_id (confirm hosted type first)', async () => {
     expect(applied['20261031000400_signals_bot_id_uuid.sql']).toBeNull()
@@ -72,6 +71,7 @@ describe('signals (after fix)', () => {
     expect(await fails(fix)).toBeNull()
     const db2 = new PGlite()
     await db2.exec(readFileSync(path.join(root, 'supabase/tests/local/bootstrap.sql'), 'utf8'))
+    await db2.exec(readFileSync(path.join(root, 'supabase/migrations/20250216000000_base_tables.sql'), 'utf8'))
     await db2.exec(`create table public.signals (id bigint generated always as identity primary key, bot_id text not null, alert_id text not null, ts timestamptz not null, unique (bot_id, alert_id));`)
     await db2.exec(fix)
     expect((await db2.query(`select format_type(atttypid, atttypmod) t from pg_attribute where attrelid = 'public.signals'::regclass and attname = 'bot_id'`)).rows).toEqual([{ t: 'uuid' }])
