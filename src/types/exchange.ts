@@ -55,6 +55,7 @@ export interface ExchangeClient {
   fetchBalance(params?: Record<string, unknown>): Promise<BalanceMap>
   fetchMarkets(): Promise<Array<{ symbol?: string; limits?: unknown; precision?: unknown }>>
   fetchOrderBook(symbol: string): Promise<OrderBookResult>
+  fetchTickers?(symbols: string[]): Promise<Record<string, TickerResult>>
   fetchTicker(symbol: string): Promise<TickerResult>
   fetchOHLCV(symbol: string, timeframe?: string, since?: number, limit?: number): Promise<number[][]>
   createOrder(
