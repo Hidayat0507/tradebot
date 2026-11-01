@@ -281,7 +281,7 @@ export default function ActivePositions({ trades }: ActivePositionsProps) {
             <TableBody>
               {paginatedPositions.map((position) => (
                 <TableRow key={position.id}>
-                  <TableCell className="font-medium">{position.botName || 'Unknown Bot'}</TableCell>
+                  <TableCell className="font-medium">{position.botName || '—'}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">{position.symbol}</Badge>
                   </TableCell>

@@ -21,13 +21,15 @@ export function CopyButton({ value, className, ...props }: CopyButtonProps) {
   return (
     <button
       className={cn(
-        "relative z-20 inline-flex h-8 w-8 items-center justify-center rounded-md border bg-background text-sm font-medium transition-all hover:bg-muted focus:outline-none",
+        "relative z-20 inline-flex h-8 w-8 items-center justify-center rounded-md border bg-background text-sm font-medium transition-all hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
         className
       )}
+      type="button"
+      aria-label={hasCopied ? 'Copied' : 'Copy to clipboard'}
       onClick={handleClick}
       {...props}
     >
-      <span className="sr-only">Copy</span>
+      <span className="sr-only" aria-live="polite">{hasCopied ? 'Copied' : ''}</span>
       {hasCopied ? (
         <CheckIcon className="h-4 w-4 text-emerald-500" />
       ) : (

@@ -29,13 +29,13 @@ export function LandingHero() {
 
         <dl className="mx-auto grid max-w-4xl grid-cols-1 gap-6 text-left sm:grid-cols-3">
           {[{
-            label: 'Bots launched',
-            value: '2,500+',
-            description: 'Across live and demo portfolios'
+            label: 'Paper mode',
+            value: 'Default',
+            description: 'Test strategies with simulated orders first'
           }, {
-            label: 'Average setup time',
-            value: '< 10 min',
-            description: 'From signal idea to first trade'
+            label: 'Signals',
+            value: 'Webhook or Pine',
+            description: 'TradingView alerts or in-app Pine strategies'
           }, {
             label: 'Exchanges supported',
             value: 'Bitget & Hyperliquid',

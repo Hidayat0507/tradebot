@@ -5,7 +5,6 @@ import { LandingHero } from '@/components/landing/hero'
 import { FeatureHighlights } from '@/components/landing/feature-highlights'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { PricingPreview } from '@/components/landing/pricing-preview'
-import { Testimonials } from '@/components/landing/testimonials'
 import { FAQSection } from '@/components/landing/faq-section'
 import { FinalCTA } from '@/components/landing/final-cta'
 
@@ -30,7 +29,6 @@ export default async function HomePage() {
         <HowItWorks />
         <PricingPreview />
         <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white">
-          <Testimonials />
         </div>
         <FAQSection />
         <FinalCTA />

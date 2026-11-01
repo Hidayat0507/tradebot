@@ -1,5 +1,6 @@
 'use client'
 
+import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import { 
   Table, 
@@ -105,12 +106,34 @@ export default function TradesTable({ trades, isLoading, onRefresh }: TradesTabl
           disabled={isLoading}
           className="flex items-center gap-1"
         >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw aria-hidden className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <ul className="md:hidden space-y-2" aria-label="Trades">
+        {isLoading ? <li className="py-6 text-center text-sm">Loading trades...</li>
+          : paginatedTrades.length === 0 ? <li className="py-6 text-center text-sm">No trades found</li>
+          : paginatedTrades.map((trade) => (
+          <li key={trade.id} className="rounded-md border p-3 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium break-words">{trade.botName || trade.botId}</span>
+              <ModeBadge mode={trade.paper || trade.simulated ? 'paper' : 'live'} />
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span>{trade.symbol}</span>
+              <Badge className={getSideColor(trade.side)}>{trade.side.toUpperCase()}</Badge>
+              <Badge className={getStatusColor(trade.status)}>{trade.status.toUpperCase()}</Badge>
+            </div>
+            <div className="mt-1 text-gray-600 dark:text-gray-300">
+              {trade.size} @ ${trade.price.toLocaleString()} · PnL {trade.pnl !== null ? `$${trade.pnl.toLocaleString()}` : '-'}
+            </div>
+            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{formatDateTime(trade.timestamp)}</div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden md:block rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -168,7 +191,7 @@ export default function TradesTable({ trades, isLoading, onRefresh }: TradesTabl
                       : '-'}
                   </TableCell>
                   <TableCell>
-                    {new Date(trade.timestamp).toLocaleString()}
+                    {formatDateTime(trade.timestamp)}
                   </TableCell>
                 </TableRow>
               ))

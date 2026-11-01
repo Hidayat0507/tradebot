@@ -1,5 +1,6 @@
 'use client'
 
+import { APP_NAME } from '@/lib/format'
 import { login, signup, signInWithGoogle } from './actions'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -125,7 +126,7 @@ export default function AuthPage() {
           
           <div className="relative z-10">
             <Link href="/" className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Trading Bot
+              {APP_NAME}
             </Link>
             <p className="mt-4 text-lg text-white/70">
               Automate your crypto trading with TradingView signals
@@ -140,12 +141,12 @@ export default function AuthPage() {
                   {
                     icon: '⚡',
                     title: 'Lightning Fast Execution',
-                    description: 'Execute trades in milliseconds with our optimized infrastructure'
+                    description: 'Webhook alerts are validated and routed to your exchange automatically'
                   },
                   {
                     icon: '🔒',
-                    title: 'Bank-Level Security',
-                    description: 'Your API keys are encrypted and never leave our secure servers'
+                    title: 'Encrypted API Keys',
+                    description: 'Exchange API keys are encrypted at rest and only used server-side'
                   },
                   {
                     icon: '📊',
@@ -173,12 +174,10 @@ export default function AuthPage() {
           </div>
 
           <div className="relative z-10 space-y-4">
-            <div className="flex items-center gap-8 text-sm text-white/60">
-              <span>2,500+ Active Bots</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/60">
+              <span>Paper mode by default</span>
               <span>•</span>
-              <span>$10M+ Trading Volume</span>
-              <span>•</span>
-              <span>99.9% Uptime</span>
+              <span>Encrypted API keys</span>
             </div>
           </div>
         </div>
@@ -189,7 +188,7 @@ export default function AuthPage() {
             {/* Mobile Logo */}
             <div className="lg:hidden text-center">
               <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Trading Bot
+                {APP_NAME}
               </Link>
             </div>
 
