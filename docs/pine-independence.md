@@ -144,3 +144,16 @@ Proposed `docs/ci/ci.yml` (copy to `.github/workflows/ci.yml`; bot token lacks `
 
 ### signals.bot_id fix
 `20261031000400_signals_bot_id_uuid.sql` — **confirm hosted `bots.id` type before applying.**
+
+## Phase 6a (feat/pine-phase6a)
+- Database types updated from the checked-in migrations for `bot_strategies` and `signals`,
+  including defaults, nullable status fields, identity restrictions, and bot relationships.
+  Strategy persistence and scheduler helpers use `SupabaseClient<Database>`; client casts removed.
+  This is a type-only refactor with no runtime behavior change or database migration.
+- **Cron scheduling requires explicit human sign-off before merge of any scheduling change.**
+  No `vercel.json` cron entry is added in this phase. The Phase 3 example remains documentation
+  only; the scheduling provider and cadence must be reviewed and approved by a human before
+  enabling automatic production calls to `/api/cron/paper-strategies`.
+- `.github/workflows` is unchanged by request. The proposed CI workflow remains in
+  `docs/ci/ci.yml`; workflow activation is deferred.
+- No hosted Supabase access or migration application is part of this phase.

@@ -14,10 +14,81 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      // Maintained from the checked-in migrations; no hosted schema access required.
+      bot_strategies: {
+        Row: {
+          id: string
+          bot_id: string
+          user_id: string
+          name: string
+          pine_source: string
+          definition: Json
+          converter: string
+          timeframe: string
+          mode: string
+          paper_quote_size: number
+          enabled: boolean
+          last_candle_time: string | null
+          last_signal_at: string | null
+          last_signal: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          bot_id: string
+          user_id: string
+          name?: string
+          pine_source: string
+          definition: Json
+          converter?: string
+          timeframe?: string
+          mode?: string
+          paper_quote_size?: number
+          enabled?: boolean
+          last_candle_time?: string | null
+          last_signal_at?: string | null
+          last_signal?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          bot_id?: string
+          user_id?: string
+          name?: string
+          pine_source?: string
+          definition?: Json
+          converter?: string
+          timeframe?: string
+          mode?: string
+          paper_quote_size?: number
+          enabled?: boolean
+          last_candle_time?: string | null
+          last_signal_at?: string | null
+          last_signal?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [{
+          foreignKeyName: 'bot_strategies_bot_id_fkey'
+          columns: ['bot_id']
+          isOneToOne: true
+          referencedRelation: 'bots'
+          referencedColumns: ['id']
+        }]
+      }
       signals: {
         Row: { id: number; bot_id: string; alert_id: string; ts: string; created_at: string }
-        Insert: { bot_id: string; alert_id: string; ts: string }
-        Update: { bot_id?: string; alert_id?: string; ts?: string }
+        Insert: { id?: never; bot_id: string; alert_id: string; ts: string; created_at?: string }
+        Update: { id?: never; bot_id?: string; alert_id?: string; ts?: string; created_at?: string }
+        Relationships: [{
+          foreignKeyName: 'signals_bot_id_fkey'
+          columns: ['bot_id']
+          isOneToOne: false
+          referencedRelation: 'bots'
+          referencedColumns: ['id']
+        }]
       }
       bots: {
         Row: {
@@ -71,6 +142,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       trades: {
         Row: {
@@ -115,6 +187,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       logs: {
         Row: {
@@ -147,6 +220,7 @@ export interface Database {
           details?: Json | null
           created_at?: string
         }
+        Relationships: []
       }
       exchange_config: {
         Row: {
@@ -176,6 +250,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       user_subscriptions: {
         Row: {
@@ -217,6 +292,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
     }
     Views: {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database, Json } from '@/lib/database/schema'
 import { z } from 'zod'
 import { convertPine, type AiConverter } from './converter'
 import { getAiConverter } from './ai-converter'
@@ -23,7 +24,7 @@ const COLUMNS = 'bot_id, name, pine_source, definition, converter, timeframe, pa
  * Converts Pine server-side (the client's definition is never trusted) and saves it for a bot.
  * Uses the caller's user-scoped client so RLS + column grants apply. Paper only.
  */
-export async function saveBotStrategy(supabase: SupabaseClient, userId: string, botId: string, input: unknown, ai: AiConverter = getAiConverter()): Promise<SaveStrategyResult> {
+export async function saveBotStrategy(supabase: SupabaseClient<Database>, userId: string, botId: string, input: unknown, ai: AiConverter = getAiConverter()): Promise<SaveStrategyResult> {
   const parsed = saveStrategySchema.safeParse(input)
   if (!parsed.success) return { ok: false, status: 400, error: 'Invalid request' }
   const body = parsed.data
@@ -32,7 +33,8 @@ export async function saveBotStrategy(supabase: SupabaseClient, userId: string, 
   const fields = {
     name: conv.definition.name,
     pine_source: body.pine,
-    definition: conv.definition,
+    // Conversion validates the closed JSON AST; its interfaces lack a JSON index signature.
+    definition: conv.definition as unknown as Json,
     converter: conv.via,
     timeframe: body.timeframe,
     paper_quote_size: body.paperQuoteSize,
@@ -46,16 +48,16 @@ export async function saveBotStrategy(supabase: SupabaseClient, userId: string, 
     ? await table.update(fields).eq('bot_id', botId).select(COLUMNS).single()
     : await table.insert({ ...fields, bot_id: botId, user_id: userId }).select(COLUMNS).single()
   if (error || !data) return { ok: false, status: 500, error: 'Failed to save strategy' }
-  return { ok: true, strategy: data as Record<string, unknown> }
+  return { ok: true, strategy: data }
 }
 
-export async function getBotStrategy(supabase: SupabaseClient, botId: string) {
+export async function getBotStrategy(supabase: SupabaseClient<Database>, botId: string) {
   const { data, error } = await supabase.from('bot_strategies').select(COLUMNS).eq('bot_id', botId).maybeSingle()
   if (error) throw new Error('Failed to load strategy')
   return data
 }
 
-export async function deleteBotStrategy(supabase: SupabaseClient, botId: string) {
+export async function deleteBotStrategy(supabase: SupabaseClient<Database>, botId: string) {
   const { error } = await supabase.from('bot_strategies').delete().eq('bot_id', botId)
   if (error) throw new Error('Failed to delete strategy')
 }

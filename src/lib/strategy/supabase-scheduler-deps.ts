@@ -1,25 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database/schema'
 import { logger } from '@/lib/logging'
 import { createPublicExchange, fetchPublicCandles, type PublicOhlcvSource } from './market-data'
 import { paperOrderPath, type ScheduledStrategy, type SchedulerDeps } from './paper-scheduler'
 import { PUBLIC_EXCHANGES } from './exchanges'
 import { validateDefinition } from './validate'
 
-type Row = {
-  bot_id: string
-  definition: unknown
-  timeframe: string
-  paper_quote_size: number | string
-  last_candle_time: string | null
-  bots: { id: string; user_id: string; name: string; exchange: string; pair: string; enabled: boolean } | null
-}
-
 /**
  * Supabase-backed scheduler deps (service-role client, server only).
  * Never selects bot credentials: the paper path does not need them.
  */
 export function createSupabaseSchedulerDeps(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   opts: { now?: () => number; publicExchange?: (id: string) => Promise<PublicOhlcvSource>; maxStrategies?: number } = {},
 ): SchedulerDeps {
   const exchanges = new Map<string, Promise<PublicOhlcvSource>>()
@@ -37,7 +29,7 @@ export function createSupabaseSchedulerDeps(
         .limit(opts.maxStrategies ?? 100)
       if (error) throw new Error('failed to load strategies')
       const out: ScheduledStrategy[] = []
-      for (const r of (data ?? []) as unknown as Row[]) {
+      for (const r of data ?? []) {
         const b = r.bots
         if (!b || !b.enabled) continue
         const exchange = b.exchange.toLowerCase()
