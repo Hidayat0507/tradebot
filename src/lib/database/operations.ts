@@ -30,7 +30,7 @@ export async function getTrades(userId: string): Promise<Trade[]> {
 export async function saveTrade(
   trade: TradeInsert
 ): Promise<void> {
-  const client = getSupabase() as unknown as import('@supabase/supabase-js').SupabaseClient<any>
+  const client = getSupabase()
   const { error } = await client
     .from('trades')
     .insert(trade as any)
@@ -50,7 +50,7 @@ export async function updateTradeStatus(
     updates.pnl = pnl
   }
 
-  const client = getSupabase() as unknown as import('@supabase/supabase-js').SupabaseClient<any>
+  const client = getSupabase()
   const { error } = await client
     .from('trades')
     .update(updates as any)

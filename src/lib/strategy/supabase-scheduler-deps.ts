@@ -1,28 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database/schema'
 import { logger } from '@/lib/logging'
 import { createPublicExchange, fetchPublicCandles, type PublicOhlcvSource } from './market-data'
 import { schedulerOrderPath, type ScheduledStrategy, type SchedulerDeps } from './paper-scheduler'
 import { PUBLIC_EXCHANGES } from './exchanges'
 import { validateDefinition } from './validate'
 
-type Row = {
-  bot_id: string
-  allow_testnet: boolean
-  max_orders_per_day: number
-  kill_switch_tripped_at: string | null
-  definition: unknown
-  timeframe: string
-  paper_quote_size: number | string
-  last_candle_time: string | null
-  bots: { id: string; user_id: string; name: string; exchange: string; pair: string; enabled: boolean; mode: 'paper' | 'testnet' | 'live' } | null
-}
 
 /**
  * Supabase-backed scheduler deps (service-role client, server only).
  * Credentials are loaded only at the final boundary for opted-in testnet bots.
  */
 export function createSupabaseSchedulerDeps(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   opts: { now?: () => number; publicExchange?: (id: string) => Promise<PublicOhlcvSource>; maxStrategies?: number } = {},
 ): SchedulerDeps {
   const exchanges = new Map<string, Promise<PublicOhlcvSource>>()
@@ -40,7 +30,7 @@ export function createSupabaseSchedulerDeps(
         .limit(opts.maxStrategies ?? 100)
       if (error) throw new Error('failed to load strategies')
       const out: ScheduledStrategy[] = []
-      for (const r of (data ?? []) as unknown as Row[]) {
+      for (const r of data ?? []) {
         const b = r.bots
         if (!b || !b.enabled || (b.mode !== 'paper' && b.mode !== 'testnet')) continue
         const exchange = b.exchange.toLowerCase()
@@ -86,7 +76,7 @@ export function createSupabaseSchedulerDeps(
       if (bot.mode === 'testnet') {
         if (current.mode !== 'testnet') throw new Error('bot is no longer testnet')
         const { data: credentials, error: credError } = await supabase.from('bots')
-          .select('api_key, api_secret, password, order_size, max_position_size')
+          .select('api_key, api_secret, password, max_position_size')
           .eq('id', bot.id).eq('mode', 'testnet').single()
         if (credError || !credentials) throw new Error('testnet credentials unavailable')
         executionBot = { ...bot, ...credentials, mode: 'testnet' }

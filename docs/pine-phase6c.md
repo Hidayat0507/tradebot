@@ -35,8 +35,8 @@ resume orders until the next UTC day. The scheduler never clears a trip automati
 On `/strategy`, only a selected testnet bot shows sandbox controls. A successful preview
 of the current source and a review acknowledgement are required before the sandbox box
 can be checked; source, bot, or preview changes revoke the acknowledgement. The API
-independently checks bot mode and acknowledgement. Rule renderer work in PR #29 and
-schema type regeneration in PR #28 remain separate; this phase does not depend on either.
+independently checks bot mode and acknowledgement. The merged schema typing from PR #28 is preserved and extended with Phase 6c's
+columns and RPC types. Rule renderer work in open PR #29 remains separate.
 
 Validation uses mocked exchange/order dependencies, PGlite migrations and role checks,
 and local Supabase pgTAP. Phase 6d's manual exchange validation remains separate; no
