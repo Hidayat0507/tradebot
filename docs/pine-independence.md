@@ -157,3 +157,16 @@ Proposed `docs/ci/ci.yml` (copy to `.github/workflows/ci.yml`; bot token lacks `
 - `.github/workflows` is unchanged by request. The proposed CI workflow remains in
   `docs/ci/ci.yml`; workflow activation is deferred.
 - No hosted Supabase access or migration application is part of this phase.
+
+## Phase 6b (feat/pine-phase6b)
+- Human-readable rule renderer (`src/lib/strategy/describe.ts`): turns a validated
+  `StrategyDefinition` into one plain-English sentence per rule (e.g. "Enter long when
+  EMA(close, 9) crosses above EMA(close, 21)"), inlining input/var refs so each line is
+  self-contained. Pure, no I/O; works on both parser and AI output.
+- `/strategy` UI shows this list unconditionally — not behind the "Advanced" toggle — for
+  every successful conversion, with a stronger "review carefully" callout when `via === 'ai'`.
+- `src/lib/strategy/ai-eval/cases.ts` grew from 3 to 6 must-reject cases, adding adversarial
+  "almost valid" scripts designed to tempt a sloppy AI into hallucinating rather than
+  declining: a user-defined function (`f(x) => x * 2`), a library `import`, and an
+  unsupported-but-real indicator (`ta.sar`), alongside the existing `request.security`/`ta.vwap`/
+  `var`+`:=` cases.
