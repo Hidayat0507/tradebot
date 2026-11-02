@@ -19,6 +19,9 @@ export interface StrategyStatusRow {
   timeframe: string
   last_candle_time: string | null
   last_signal_at: string | null
+  kill_switch_tripped_at?: string | null
+  allow_testnet?: boolean
+  max_orders_per_day?: number
   last_signal: string | null
   bots: { name: string; pair: string } | null
 }
@@ -68,12 +71,13 @@ export function computePaperPnl(rows: PaperTradeRow[]): PaperPnl {
   return { realized: round(realized), closedTrades, wins, winRate: closedTrades ? wins / closedTrades : 0, byBot }
 }
 
-export type StrategyHealth = 'disabled' | 'waiting' | 'ok' | 'stale'
+export type StrategyHealth = 'disabled' | 'waiting' | 'ok' | 'stale' | 'stopped'
 
 const TF_MS: Record<string, number> = { '1m': 6e4, '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '1d': 864e5 }
 
 /** stale = enabled but no processed candle for > 3 timeframes (cron not running?). */
-export function strategyHealth(s: Pick<StrategyStatusRow, 'enabled' | 'timeframe' | 'last_candle_time'>, now: number): StrategyHealth {
+export function strategyHealth(s: Pick<StrategyStatusRow, 'enabled' | 'timeframe' | 'last_candle_time' | 'kill_switch_tripped_at'>, now: number): StrategyHealth {
+  if (s.kill_switch_tripped_at) return 'stopped'
   if (!s.enabled) return 'disabled'
   if (!s.last_candle_time) return 'waiting'
   const tf = TF_MS[s.timeframe] ?? 36e5

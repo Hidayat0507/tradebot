@@ -9,6 +9,9 @@ export const TIMEFRAME_MS: Record<string, number> = {
 
 export interface ScheduledStrategy {
   bot: BotData & { pair: string }
+  allowTestnet?: boolean
+  maxOrdersPerDay?: number
+  killSwitchTrippedAt?: string | null
   definition: StrategyDefinition
   timeframe: string
   paperQuoteSize: number
@@ -22,7 +25,7 @@ export interface SchedulerDeps {
   fetchCandles(exchange: string, symbol: string, timeframe: string, limit: number): Promise<Candle[]>
   /** durable idempotency claim (signals table); false if already claimed */
   claimSignal(botId: string, alertId: string, tsIso: string): Promise<boolean>
-  /** existing order path; always called with a paper-mode bot */
+  /** existing order path; called only with a paper or testnet bot */
   executeOrder(alert: TradingViewSignal, bot: BotData): Promise<unknown>
   /** advance cursor; lastSignal is the newest order sent this tick (for the dashboard) */
   saveCursor(botId: string, lastCandleTime: number, lastSignal?: { time: number; summary: string }): Promise<void>
@@ -97,12 +100,23 @@ export interface TickResult {
   detail?: string
 }
 
-/** One scheduler tick: evaluate closed candles for each enabled strategy and send paper orders. */
+/** Literal allowlist at both scheduler entry and the final order boundary. */
+export function schedulerBot(bot: BotData, allowTestnet: boolean): BotData {
+  if (bot.mode !== 'paper' && bot.mode !== 'testnet') throw new Error('in-app strategies allow paper/testnet only')
+  return { ...bot, mode: allowTestnet && bot.mode === 'testnet' ? 'testnet' : 'paper' }
+}
+
+/** One scheduler tick: evaluate closed candles and send gated paper/testnet orders. */
 export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Promise<TickResult[]> {
   const results: TickResult[] = []
   for (const s of await deps.loadEnabled()) {
     const botId = s.bot.id
     try {
+      // Reject unknown/live source modes before market data or any durable claim.
+      const routedBot = schedulerBot(s.bot, s.allowTestnet === true)
+      if (s.killSwitchTrippedAt) {
+        results.push({ botId, status: 'skipped', orders: 0, detail: 'kill switch tripped' }); continue
+      }
       const tf = TIMEFRAME_MS[s.timeframe]
       if (!tf) { results.push({ botId, status: 'skipped', orders: 0, detail: 'bad timeframe' }); continue }
       const now = deps.now()
@@ -117,7 +131,6 @@ export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Prom
       // First run only acts on the latest closed bar: never replay history into orders.
       const cursor = s.lastCandleTime ?? closed[closed.length - 2].time
       const intents = signalsToIntents(evaluate(s.definition, closed), closed).filter((i) => i.time > cursor)
-      const paperBot: BotData = { ...s.bot, mode: 'paper' }
       let orders = 0
       let lastSignal: { time: number; summary: string } | undefined
       for (const [seq, intent] of intents.entries()) {
@@ -127,7 +140,7 @@ export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Prom
         await deps.executeOrder({
           bot_id: botId, symbol: s.bot.pair, action: intent.side, price: intent.price,
           amount: s.paperQuoteSize / intent.price, alert_id: alertId, ts, strategy: s.definition.name,
-        }, paperBot)
+        }, routedBot)
         orders++
         lastSignal = { time: intent.time, summary: `${intent.side} ${intent.reason} @ ${intent.price}` }
       }
@@ -147,6 +160,15 @@ export async function runPaperTick(deps: SchedulerDeps, candleLimit = 500): Prom
 export function paperOrderPath(supabase: unknown): SchedulerDeps['executeOrder'] {
   return async (alert, bot) => {
     if (bot.mode !== 'paper') throw new Error('in-app strategies are paper only')
+    const { processWebhookAlert } = await import('@/app/api/_middleware/webhook/process-webhook')
+    return processWebhookAlert(alert, bot, supabase as Parameters<typeof processWebhookAlert>[2])
+  }
+}
+
+/** Defense in depth: this boundary cannot be used to submit live or unknown modes. */
+export function schedulerOrderPath(supabase: unknown): SchedulerDeps['executeOrder'] {
+  return async (alert, bot) => {
+    if (bot.mode !== 'paper' && bot.mode !== 'testnet') throw new Error('in-app strategies allow paper/testnet only')
     const { processWebhookAlert } = await import('@/app/api/_middleware/webhook/process-webhook')
     return processWebhookAlert(alert, bot, supabase as Parameters<typeof processWebhookAlert>[2])
   }

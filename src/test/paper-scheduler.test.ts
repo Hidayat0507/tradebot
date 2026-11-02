@@ -10,7 +10,7 @@ const HOUR = 3_600_000
 const candles = sampleCandles(400)
 const def = parsePine(SAMPLE_PINE.emaCross)
 const intents = signalsToIntents(evaluate(def, candles))
-const bot = { id: 'bot-1', exchange: 'binance', pair: 'BTC/USDT', api_key: 'k', api_secret: 's', user_id: 'u', webhook_secret: 'w', name: 'b', mode: 'live' }
+const bot = { id: 'bot-1', exchange: 'binance', pair: 'BTC/USDT', api_key: 'k', api_secret: 's', user_id: 'u', webhook_secret: 'w', name: 'b', mode: 'paper' as const }
 
 function setup(over: Partial<ScheduledStrategy> = {}, nowIdx?: number) {
   const target = intents[2]

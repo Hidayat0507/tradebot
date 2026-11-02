@@ -12,6 +12,7 @@ type Data = { strategies: (StrategyStatusRow & { health: StrategyHealth })[]; tr
 
 const fmt = (iso: string | null) => formatDateTime(iso)
 const HEALTH: Record<StrategyHealth, string> = {
+  stopped: 'bg-red-100 text-red-800',
   ok: 'bg-green-100 text-green-800', waiting: 'bg-blue-100 text-blue-800',
   stale: 'bg-yellow-100 text-yellow-900', disabled: 'bg-gray-100 text-gray-700',
 }
@@ -32,12 +33,23 @@ export default function PaperStrategies() {
   }, [])
   useEffect(() => { load() }, [load])
 
+  async function clear(botId: string) {
+    try {
+      const res = await fetch(`/api/bots/${encodeURIComponent(botId)}/strategy`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear-kill-switch' }),
+      })
+      if (!res.ok) throw new Error('Could not clear kill switch. Check the bot mode and try again.')
+      await load()
+    } catch (e) { setError((e as Error).message) }
+  }
+
   return (
     <Card className="bg-white/70 dark:bg-gray-800/70 rounded-2xl shadow-lg">
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
           <CardTitle className="text-xl font-semibold">Paper trading</CardTitle>
-          <CardDescription>Simulated only — no real orders. Pine strategy status, paper trades and paper P&L.</CardDescription>
+          <CardDescription>Pine strategy status and kill switches. Trades and P&L below are paper only.</CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={load} aria-label="Refresh paper trading">Refresh</Button>
       </CardHeader>
@@ -59,7 +71,14 @@ export default function PaperStrategies() {
                 {data.strategies.map((s) => (
                   <tr key={s.bot_id} className="border-t">
                     <td>{s.bots?.name ?? s.bot_id} <span className="text-muted-foreground">{s.bots?.pair}</span></td>
-                    <td><span className={`rounded px-2 py-0.5 text-xs ${HEALTH[s.health]}`}>{s.health}</span></td>
+                    <td><span className={`rounded px-2 py-0.5 text-xs ${HEALTH[s.health]}`}>{s.health}</span>
+                      {s.allow_testnet && <span className="ml-2">Sandbox orders (mock funds)</span>}
+                      {s.kill_switch_tripped_at && <div>
+                        <p>{s.last_signal?.startsWith('stopped') ? s.last_signal : 'Stopped by safety guard'} ({fmt(s.kill_switch_tripped_at)})</p>
+                        <Button size="sm" variant="outline" onClick={() => clear(s.bot_id)}>Clear and re-enable</Button>
+                        <p className="text-xs">Today’s order count is retained.</p>
+                      </div>}
+                    </td>
                     <td>{s.timeframe}</td>
                     <td>{fmt(s.last_candle_time)}</td>
                     <td>{s.last_signal ? `${s.last_signal} (${fmt(s.last_signal_at)})` : '—'}</td>

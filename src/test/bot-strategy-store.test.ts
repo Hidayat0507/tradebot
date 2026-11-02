@@ -30,7 +30,7 @@ describe('saveBotStrategy', () => {
     const { client, calls } = fake(true)
     await saveBotStrategy(client, 'u1', 'b1', { pine: SAMPLE_PINE.rsi, enabled: true, timeframe: '4h' })
     const upd = calls.find((c) => c.op === 'update')!.args[0] as Record<string, unknown>
-    expect(Object.keys(upd).sort()).toEqual(['converter', 'definition', 'enabled', 'name', 'paper_quote_size', 'pine_source', 'timeframe'])
+    expect(Object.keys(upd).sort()).toEqual(['allow_testnet', 'converter', 'definition', 'enabled', 'max_orders_per_day', 'name', 'paper_quote_size', 'pine_source', 'timeframe'])
     expect(upd.enabled).toBe(true)
     expect(calls.some((c) => c.op === 'insert')).toBe(false)
   })

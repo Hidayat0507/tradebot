@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const [strategies, trades] = await Promise.all([
       supabase
         .from('bot_strategies')
-        .select('bot_id, name, enabled, timeframe, last_candle_time, last_signal_at, last_signal, bots(name, pair)')
+        .select('bot_id, name, enabled, timeframe, last_candle_time, last_signal_at, last_signal, allow_testnet, max_orders_per_day, kill_switch_tripped_at, bots(name, pair)')
         .eq('user_id', user.id),
       supabase
         .from('trades')

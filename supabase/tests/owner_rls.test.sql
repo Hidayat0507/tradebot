@@ -79,5 +79,34 @@ select throws_ok($$select * from public.bots$$, '42501', null, 'anonymous access
 select throws_ok($$select * from public.trades$$, '42501', null, 'anonymous trades access denied');
 select throws_ok($$select * from public.logs$$, '42501', null, 'anonymous logs access denied');
 reset role;
+update public.bots set mode='paper' where id='20000000-0000-0000-0000-000000000002';
+-- Phase 6c: strategy grants, RLS and atomic cap reservations (local fixtures only).
+insert into public.bot_strategies (bot_id,user_id,pine_source,definition,enabled,max_orders_per_day)
+values ('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','fixture','{}',true,1);
+select ok(has_column_privilege('authenticated','public.bot_strategies','allow_testnet','UPDATE'), 'owner may edit opt-in');
+select ok(has_column_privilege('authenticated','public.bot_strategies','max_orders_per_day','INSERT'), 'owner may set cap');
+select ok(not has_column_privilege('authenticated','public.bot_strategies','kill_switch_tripped_at','UPDATE'), 'trip state is server-owned');
+select ok(not has_column_privilege('authenticated','public.bot_strategies','kill_switch_tripped_at','INSERT'), 'owner cannot insert trip state');
+select ok(not has_function_privilege('authenticated','public.claim_strategy_order(uuid,text,timestamptz)','EXECUTE'), 'owner cannot reserve scheduler orders');
+select ok(not has_function_privilege('anon','public.clear_strategy_kill_switch(uuid,uuid)','EXECUTE'), 'anonymous cannot clear guard');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+select lives_ok($$update public.bot_strategies set allow_testnet=false, max_orders_per_day=1$$, 'owner can edit guards');
+select throws_ok($$update public.bot_strategies set kill_switch_tripped_at=null$$, '42501', null, 'owner cannot clear trip column');
+select throws_ok($$update public.bot_strategies set max_orders_per_day=51$$, '23514', null, 'cap upper bound');
+select throws_ok($$update public.bot_strategies set max_orders_per_day=0$$, '23514', null, 'cap lower bound');
+select throws_ok($$update public.bot_strategies set mode='live'$$, '42501', null, 'mode remains server owned');
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select is((select count(*)::int from public.bot_strategies), 0, 'other owner cannot read strategy');
+select is(pg_temp.affected($$update public.bot_strategies set allow_testnet=true$$), 0, 'other owner cannot edit guard');
+reset role;
+set local role service_role;
+select is(public.claim_strategy_order('20000000-0000-0000-0000-000000000002','pine:cap-1',now()), 'claimed', 'first reservation permitted');
+select ok((select kill_switch_tripped_at is not null from public.bot_strategies where bot_id='20000000-0000-0000-0000-000000000002'), 'cap trips switch');
+select is(public.claim_strategy_order('20000000-0000-0000-0000-000000000002','pine:cap-2',now()), 'stopped', 'extra reservation refused');
+select ok(not public.clear_strategy_kill_switch('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001'), 'wrong owner cannot clear');
+select ok(public.clear_strategy_kill_switch('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002'), 'owner clear enables strategy');
+select is(public.claim_strategy_order('20000000-0000-0000-0000-000000000002','pine:cap-3',now()), 'stopped', 'clear does not reset daily budget');
+reset role;
 select * from finish();
 rollback;
