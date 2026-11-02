@@ -28,6 +28,9 @@ export interface Database {
           mode: string
           paper_quote_size: number
           enabled: boolean
+          allow_testnet: boolean
+          max_orders_per_day: number
+          kill_switch_tripped_at: string | null
           last_candle_time: string | null
           last_signal_at: string | null
           last_signal: string | null
@@ -46,6 +49,9 @@ export interface Database {
           mode?: string
           paper_quote_size?: number
           enabled?: boolean
+          allow_testnet?: boolean
+          max_orders_per_day?: number
+          kill_switch_tripped_at?: string | null
           last_candle_time?: string | null
           last_signal_at?: string | null
           last_signal?: string | null
@@ -64,6 +70,9 @@ export interface Database {
           mode?: string
           paper_quote_size?: number
           enabled?: boolean
+          allow_testnet?: boolean
+          max_orders_per_day?: number
+          kill_switch_tripped_at?: string | null
           last_candle_time?: string | null
           last_signal_at?: string | null
           last_signal?: string | null
@@ -299,7 +308,14 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_strategy_order: {
+        Args: { p_bot_id: string; p_alert_id: string; p_ts: string }
+        Returns: string
+      }
+      clear_strategy_kill_switch: {
+        Args: { p_bot_id: string; p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       trade_side: TradeSide

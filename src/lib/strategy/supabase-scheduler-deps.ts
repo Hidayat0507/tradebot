@@ -2,13 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database/schema'
 import { logger } from '@/lib/logging'
 import { createPublicExchange, fetchPublicCandles, type PublicOhlcvSource } from './market-data'
-import { paperOrderPath, type ScheduledStrategy, type SchedulerDeps } from './paper-scheduler'
+import { schedulerOrderPath, type ScheduledStrategy, type SchedulerDeps } from './paper-scheduler'
 import { PUBLIC_EXCHANGES } from './exchanges'
 import { validateDefinition } from './validate'
 
+
 /**
  * Supabase-backed scheduler deps (service-role client, server only).
- * Never selects bot credentials: the paper path does not need them.
+ * Credentials are loaded only at the final boundary for opted-in testnet bots.
  */
 export function createSupabaseSchedulerDeps(
   supabase: SupabaseClient<Database>,
@@ -23,7 +24,7 @@ export function createSupabaseSchedulerDeps(
     async loadEnabled() {
       const { data, error } = await supabase
         .from('bot_strategies')
-        .select('bot_id, definition, timeframe, paper_quote_size, last_candle_time, bots!inner(id, user_id, name, exchange, pair, enabled)')
+        .select('bot_id, definition, timeframe, paper_quote_size, last_candle_time, allow_testnet, max_orders_per_day, kill_switch_tripped_at, bots!inner(id, user_id, name, exchange, pair, enabled, mode)')
         .eq('enabled', true)
         .eq('mode', 'paper')
         .limit(opts.maxStrategies ?? 100)
@@ -31,9 +32,9 @@ export function createSupabaseSchedulerDeps(
       const out: ScheduledStrategy[] = []
       for (const r of data ?? []) {
         const b = r.bots
-        if (!b || !b.enabled) continue
+        if (!b || !b.enabled || (b.mode !== 'paper' && b.mode !== 'testnet')) continue
         const exchange = b.exchange.toLowerCase()
-        if (!(PUBLIC_EXCHANGES as readonly string[]).includes(exchange)) {
+        if (!(PUBLIC_EXCHANGES as readonly string[]).includes(exchange) && !(exchange === 'hyperliquid' && b.mode === 'testnet')) {
           logger.warn('Skipping strategy: exchange not in public allowlist', { botId: b.id })
           continue
         }
@@ -46,7 +47,8 @@ export function createSupabaseSchedulerDeps(
           continue
         }
         out.push({
-          bot: { id: b.id, user_id: b.user_id, name: b.name, exchange, pair: b.pair, api_key: '', api_secret: '', webhook_secret: '', mode: 'paper' },
+          bot: { id: b.id, user_id: b.user_id, name: b.name, exchange, pair: b.pair, api_key: '', api_secret: '', webhook_secret: '', mode: b.mode },
+          allowTestnet: r.allow_testnet, maxOrdersPerDay: r.max_orders_per_day, killSwitchTrippedAt: r.kill_switch_tripped_at,
           definition,
           timeframe: r.timeframe,
           paperQuoteSize: Number(r.paper_quote_size),
@@ -59,21 +61,56 @@ export function createSupabaseSchedulerDeps(
       return fetchPublicCandles(await getExchange(exchange), symbol, timeframe, limit)
     },
     async claimSignal(botId, alertId, ts) {
-      const { error } = await supabase.from('signals').insert({ bot_id: botId, alert_id: alertId, ts })
-      if (error?.code === '23505') return false
-      if (error) throw new Error('failed to record signal')
-      return true
+      const { data, error } = await supabase.rpc('claim_strategy_order', { p_bot_id: botId, p_alert_id: alertId, p_ts: ts })
+      if (error) throw new Error('failed to reserve strategy order')
+      return data === 'claimed'
     },
-    executeOrder: paperOrderPath(supabase),
+    async executeOrder(alert, bot) {
+      // Re-read current mode immediately before execution, never load credentials for live bots.
+      const { data: current, error } = await supabase.from('bots')
+        .select('id, mode, enabled').eq('id', bot.id).single()
+      if (error || !current?.enabled || (current.mode !== 'paper' && current.mode !== 'testnet')) {
+        throw new Error('bot is no longer eligible for scheduler orders')
+      }
+      let executionBot = bot
+      if (bot.mode === 'testnet') {
+        if (current.mode !== 'testnet') throw new Error('bot is no longer testnet')
+        const { data: credentials, error: credError } = await supabase.from('bots')
+          .select('api_key, api_secret, password, max_position_size')
+          .eq('id', bot.id).eq('mode', 'testnet').single()
+        if (credError || !credentials) throw new Error('testnet credentials unavailable')
+        executionBot = { ...bot, ...credentials, mode: 'testnet' }
+      }
+      const trade = await schedulerOrderPath(supabase)(alert, executionBot)
+      // Existing order path records realized closes with pnl. Only a NEW losing close
+      // can trip this guard, so owner clearing does not immediately re-trip on old losses.
+      const pnl = (trade as { pnl?: number | null } | null)?.pnl
+      if (pnl != null && Number(pnl) < 0) {
+        const { data: closes, error: lossError } = await supabase.from('trades').select('pnl')
+          .eq('bot_id', bot.id).not('pnl', 'is', null).order('created_at', { ascending: false }).limit(3)
+        if (lossError) throw new Error('failed to check strategy losses')
+        if (closes?.length === 3 && closes.every(t => Number(t.pnl) < 0)) {
+          const { error: tripError } = await supabase.from('bot_strategies')
+            .update({ kill_switch_tripped_at: new Date((opts.now ?? Date.now)()).toISOString(), last_signal: 'stopped — 3 losing closes in a row' }).eq('bot_id', bot.id)
+          if (tripError) throw new Error('failed to trip strategy kill switch')
+        }
+      }
+      return trade
+    },
     async saveCursor(botId, lastCandleTime, lastSignal) {
       const { error } = await supabase
         .from('bot_strategies')
         .update({
           last_candle_time: new Date(lastCandleTime).toISOString(),
-          ...(lastSignal ? { last_signal_at: new Date(lastSignal.time).toISOString(), last_signal: lastSignal.summary.slice(0, 100) } : {}),
         })
         .eq('bot_id', botId)
       if (error) throw new Error('failed to save cursor')
+      if (lastSignal) {
+        const { error: signalError } = await supabase.from('bot_strategies')
+          .update({ last_signal_at: new Date(lastSignal.time).toISOString(), last_signal: lastSignal.summary.slice(0, 100) })
+          .eq('bot_id', botId).is('kill_switch_tripped_at', null)
+        if (signalError) throw new Error('failed to save last signal')
+      }
     },
     now: opts.now ?? Date.now,
   }

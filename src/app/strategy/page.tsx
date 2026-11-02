@@ -32,7 +32,7 @@ export default function StrategyPage() {
   const [exchange, setExchange] = useState<string>('binance')
   const [symbol, setSymbol] = useState('BTC/USDT')
   const [timeframe, setTimeframe] = useState<string>('1h')
-  const [bots, setBots] = useState<{ id: string; name: string; pair: string }[]>([])
+  const [bots, setBots] = useState<{ id: string; name: string; pair: string; mode: string }[]>([])
   const [botId, setBotId] = useState('')
   const [quoteSize, setQuoteSize] = useState(100)
   const [enabled, setEnabled] = useState(false)
@@ -40,8 +40,16 @@ export default function StrategyPage() {
   const [saving, setSaving] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
+  const [previewPine, setPreviewPine] = useState('')
+  const [allowTestnet, setAllowTestnet] = useState(false)
+  const [reviewed, setReviewed] = useState(false)
+  const [maxOrders, setMaxOrders] = useState(5)
+  const testnetBot = bots.find(b => b.id === botId)?.mode === 'testnet'
+  const sandbox = testnetBot && allowTestnet
+  useEffect(() => { setReviewed(false); setAllowTestnet(false) }, [pine, botId, result])
+
   useEffect(() => {
-    createClient().from('bots').select('id, name, pair').order('created_at', { ascending: false })
+    createClient().from('bots').select('id, name, pair, mode').order('created_at', { ascending: false })
       .then(({ data }) => { if (data) { setBots(data); if (data[0]) setBotId(data[0].id) } })
   }, [])
 
@@ -51,11 +59,11 @@ export default function StrategyPage() {
     try {
       const res = await fetch(`/api/bots/${encodeURIComponent(botId)}/strategy`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pine, timeframe, paperQuoteSize: quoteSize, enabled }),
+        body: JSON.stringify({ pine, timeframe, paperQuoteSize: quoteSize, enabled, allow_testnet: sandbox, max_orders_per_day: maxOrders, reviewed_rules: reviewed }),
       })
       const data = await res.json().catch(() => ({}))
       setSaveMsg(res.ok
-        ? { ok: true, text: `Saved (${enabled ? 'enabled' : 'disabled'}, paper, ${timeframe}).` }
+        ? { ok: true, text: `Saved (${enabled ? 'enabled' : 'disabled'}, ${sandbox ? 'testnet' : 'paper'}, ${timeframe}).` }
         : { ok: false, text: (() => { const f = friendlyPineError(data.error ?? '', pine, res.status === 422 ? undefined : res.status); return `${f.title}${f.line ? ` (line ${f.line})` : ''}. ${f.hint}` })() })
     } catch (e) {
       setSaveMsg({ ok: false, text: (e as Error).message })
@@ -75,6 +83,7 @@ export default function StrategyPage() {
         }),
       })
       const data = await res.json()
+      setPreviewPine(pine)
       setResult(data.ok === undefined || !res.ok ? { ok: false, error: data.error ?? `HTTP ${res.status}`, status: res.ok || res.status === 422 ? undefined : res.status } : data)
     } catch {
       setResult({ ok: false, error: 'Network error — check your connection and try again.' })
@@ -90,12 +99,12 @@ export default function StrategyPage() {
         <p className="text-sm text-muted-foreground">
           Try out a trading idea before risking real money. Pick an example below, see how it would have
           performed on past prices, then save it to a bot to run in paper mode.
-          <span className="ml-2 rounded bg-amber-400/15 px-2 py-0.5 text-amber-300 ring-1 ring-amber-400/40">Paper mode — no real orders</span>
+          <span className="ml-2 rounded bg-amber-400/15 px-2 py-0.5 text-amber-300 ring-1 ring-amber-400/40">{sandbox && enabled ? 'This places real sandbox orders — mock funds' : 'Paper mode — no real orders'}</span>
         </p>
         <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-gray-700 dark:text-gray-300">
           <li>Pick an example strategy below, or paste your own Pine Script (the language TradingView alerts use).</li>
           <li>Click &quot;Convert &amp; backtest&quot; to see how it would have performed.</li>
-          <li>Choose a bot and timeframe, then save it — saved strategies only ever trade in paper mode.</li>
+          <li>Choose a bot and timeframe, then save it — paper is the default; testnet bots can opt into sandbox orders.</li>
         </ol>
       </div>
       <label className="flex items-center justify-end gap-2 text-sm text-gray-400">
@@ -156,7 +165,7 @@ export default function StrategyPage() {
       </div>
 
       <section className="space-y-3 rounded border p-4 text-sm">
-        <h2 className="font-semibold">Save to bot (paper)</h2>
+        <h2 className="font-semibold">Save to bot ({sandbox ? 'testnet' : 'paper'})</h2>
         {bots.length === 0 ? <p className="text-muted-foreground">No bots yet.</p> : (
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">Bot
@@ -169,18 +178,28 @@ export default function StrategyPage() {
                 {TIMEFRAMES.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
-            <label className="flex flex-col gap-1">Paper order size (quote)
+            <label className="flex flex-col gap-1">Order size (quote)
               <input type="number" min={1} max={1000000} className={`${FIELD} w-32 p-2`} value={quoteSize}
                 onChange={(e) => setQuoteSize(Number(e.target.value))} />
             </label>
             <label className="flex items-center gap-2 pb-2">
               <input type="checkbox" className="h-4 w-4 accent-amber-400" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-              Enable paper scheduler
+              Enable strategy scheduler
             </label>
-            <Button onClick={save} disabled={saving || !botId}>{saving ? 'Saving…' : 'Save strategy'}</Button>
+            <Button onClick={save} disabled={saving || !botId || (sandbox && !reviewed)}>{saving ? 'Saving…' : 'Save strategy'}</Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">Saved strategies run in paper mode only. Disabled unless you tick the box.</p>
+        {testnetBot && <div className="space-y-3 rounded border border-amber-500 p-3">
+          <p className="font-semibold">Testnet — real sandbox orders, mock funds</p>
+          {result?.ok && <details open><summary>Converted rules to review</summary><pre className="max-h-64 overflow-auto text-xs">{JSON.stringify(result.definition, null, 2)}</pre></details>}
+          <label className="flex gap-2"><input type="checkbox" checked={reviewed} disabled={!result?.ok || previewPine !== pine}
+            onChange={e => { setReviewed(e.target.checked); if (!e.target.checked) setAllowTestnet(false) }} />I reviewed the converted rules above</label>
+          <label className="flex gap-2"><input type="checkbox" checked={allowTestnet} disabled={!reviewed}
+            onChange={e => setAllowTestnet(e.target.checked)} />Allow testnet sandbox orders</label>
+          <label>Maximum orders per UTC day <input className={`${FIELD} w-20 p-2`} type="number" min={1} max={50} value={maxOrders} onChange={e => setMaxOrders(Number(e.target.value))} /></label>
+          <p>Stops after the daily cap or 3 losing closes in a row. Clear explicitly from the dashboard.</p>
+        </div>}
+        <p className="text-xs text-muted-foreground">Paper by default. Testnet requires review and opt-in. Disabled unless you tick the box.</p>
         {saveMsg && <p className={saveMsg.ok ? 'text-green-700' : 'text-red-700'}>{saveMsg.text}</p>}
       </section>
 

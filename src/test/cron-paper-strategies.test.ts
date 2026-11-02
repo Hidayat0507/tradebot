@@ -57,21 +57,21 @@ function fakeSupabase(rows: unknown[], insertError: { code?: string } | null = n
     b.then = (res: (v: unknown) => unknown) => res({ data: rows, error: null })
     return b
   }
-  return { client: { from: (t: string) => builder(t) } as never, calls }
+  return { client: { from: (t: string) => builder(t), rpc: async () => ({ data: insertError ? 'duplicate' : 'claimed', error: null }) } as never, calls }
 }
 
 describe('createSupabaseSchedulerDeps', () => {
   const def = parsePine(SAMPLE_PINE.emaCross)
   const row = (over: object = {}) => ({
     bot_id: 'b1', definition: def, timeframe: '1h', paper_quote_size: '50', last_candle_time: '2026-01-01T00:00:00Z',
-    bots: { id: 'b1', user_id: 'u1', name: 'n', exchange: 'Binance', pair: 'BTC/USDT', enabled: true }, ...over,
+    bots: { id: 'b1', user_id: 'u1', name: 'n', exchange: 'Binance', pair: 'BTC/USDT', enabled: true, mode: 'paper' }, ...over,
   })
   it('loads enabled paper strategies without credentials; skips invalid/disabled/non-allowlisted', async () => {
     const { client, calls } = fakeSupabase([
       row(),
       row({ bot_id: 'b2', definition: { version: 1, rules: [{ when: { type: 'js' } }] } }),
       row({ bot_id: 'b3', bots: { id: 'b3', user_id: 'u', name: 'n', exchange: 'binance', pair: 'X/Y', enabled: false } }),
-      row({ bot_id: 'b4', bots: { id: 'b4', user_id: 'u', name: 'n', exchange: 'hyperliquid', pair: 'X/Y', enabled: true } }),
+      row({ bot_id: 'b4', bots: { id: 'b4', user_id: 'u', name: 'n', exchange: 'hyperliquid', pair: 'X/Y', enabled: true, mode: 'live' } }),
     ])
     const loaded = await createSupabaseSchedulerDeps(client).loadEnabled()
     expect(loaded.map((s) => s.bot.id)).toEqual(['b1'])
@@ -79,6 +79,15 @@ describe('createSupabaseSchedulerDeps', () => {
     const sel = String(calls.find((c) => c.op === 'select')!.args[0])
     expect(sel).not.toMatch(/api_key|api_secret|password|webhook_secret/)
     expect(calls.filter((c) => c.op === 'eq').map((c) => c.args)).toEqual([['enabled', true], ['mode', 'paper']])
+  })
+  it('loads opted-in Hyperliquid testnet routing without loading credentials', async () => {
+    const { client, calls } = fakeSupabase([row({ allow_testnet: true, max_orders_per_day: 2, kill_switch_tripped_at: null,
+      bots: { id: 'b1', user_id: 'u1', name: 'n', exchange: 'hyperliquid', pair: 'BTC/USDC:USDC', enabled: true, mode: 'testnet' } })])
+    expect(await createSupabaseSchedulerDeps(client).loadEnabled()).toEqual([expect.objectContaining({
+      allowTestnet: true, maxOrdersPerDay: 2, killSwitchTrippedAt: null,
+      bot: expect.objectContaining({ mode: 'testnet', api_key: '', api_secret: '' }),
+    })])
+    expect(String(calls.find(c => c.op === 'select')!.args[0])).not.toMatch(/api_secret|api_key/)
   })
   it('claimSignal: duplicate → false; cursor update scoped to bot', async () => {
     const dup = createSupabaseSchedulerDeps(fakeSupabase([], { code: '23505' }).client)
