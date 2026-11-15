@@ -48,7 +48,7 @@ class Logger {
     );
   }
 
-  private sanitizeValue(value: unknown, keyPath: string[] = []): unknown {
+  private sanitizeValue(value: unknown, keyPath: string[] = [], ancestors = new WeakSet<object>()): unknown {
     // Redact by key
     const lastKey = keyPath[keyPath.length - 1];
     if (lastKey && this.redactKey(lastKey)) {
@@ -56,21 +56,28 @@ class Logger {
     }
 
     if (value === null || value === undefined) return value;
+    if (typeof value === 'bigint') return value.toString();
     if (typeof value === 'string') {
       // Truncate very long strings to avoid logging payloads
       const limit = 200;
       return value.length > limit ? value.slice(0, limit) + '…' : value;
     }
-    if (Array.isArray(value)) {
-      return value.map((v, i) => this.sanitizeValue(v, [...keyPath, String(i)]));
-    }
     if (typeof value === 'object') {
-      const obj = value as Record<string, unknown>;
-      const sanitized: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(obj)) {
-        sanitized[k] = this.sanitizeValue(v, [...keyPath, k]);
+      if (ancestors.has(value)) return '[Circular]';
+      ancestors.add(value);
+      try {
+        if (Array.isArray(value)) {
+          return value.map((v, i) => this.sanitizeValue(v, [...keyPath, String(i)], ancestors));
+        }
+        const sanitized: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value)) {
+          sanitized[k] = this.sanitizeValue(v, [...keyPath, k], ancestors);
+        }
+        return sanitized;
+      } finally {
+        // Only ancestors are cycles; shared objects in sibling fields are valid.
+        ancestors.delete(value);
       }
-      return sanitized;
     }
     return value;
   }

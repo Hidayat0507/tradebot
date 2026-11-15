@@ -27,7 +27,7 @@ describe('log context serialization', () => {
   it('serializes bigint values as decimal strings without losing precision', () => {
     const output = vi.spyOn(console, 'info').mockImplementation(() => {})
 
-    expect(() => logger.info('IDs', { ids: [9007199254740993n, -2n, 0n] })).not.toThrow()
+    expect(() => logger.info('IDs', { ids: [BigInt('9007199254740993'), BigInt(-2), BigInt(0)] })).not.toThrow()
     expect(JSON.parse(output.mock.calls[0][0]).context).toEqual({ ids: ['9007199254740993', '-2', '0'] })
   })
 
