@@ -8,3 +8,5 @@
 - Regression confirmed before the fix: 4 of 9 new tests failed because future rows contributed to 24h PnL.
 - Implemented the upper bound `timestamp <= now`, preserving the existing exclusive lower bound.
 - Validation passed: `npx --no-install vitest run src/test/pnl-split.test.ts src/test/ux-p0.test.ts --maxWorkers=1 --minWorkers=1` (19 tests); `git diff --check` passed.
+- Implementation committed and pushed as `f4e55ea`. Opened the single draft PR #34 into `main`: https://github.com/Hidayat0507/tradebot/pull/34.
+- Live `gh pr view` at 2026-11-15T20:10:42Z: `MERGEABLE`, merge state `UNSTABLE`, still draft. Recorded details and appended self-review in `docs/REVIEW-tradebot-filler-930.md`.
