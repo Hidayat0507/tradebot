@@ -41,7 +41,8 @@ export interface PaperPnl {
  * Recomputed client-side instead of trusting the stored pnl column, which is null for unmatched sells.
  */
 export function computePaperPnl(rows: PaperTradeRow[]): PaperPnl {
-  const sorted = rows.filter(isPaperTrade).slice().sort((a, b) => a.created_at.localeCompare(b.created_at))
+  // ISO strings can use different offsets or fractional precision; compare instants for FIFO.
+  const sorted = rows.filter(isPaperTrade).slice().sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
   const lots = new Map<string, { size: number; price: number }[]>()
   const byBot: PaperPnl['byBot'] = {}
   let realized = 0, closedTrades = 0, wins = 0
