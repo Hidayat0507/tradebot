@@ -16,3 +16,6 @@
 - Checked open PRs first: #31 (auth), #32 (cache), #33 (webhook), #34 (PnL on this branch). Reusing draft #34 to keep one PR on the required branch; `origin/main` remains an ancestor.
 - Selected a distinct small fix: reject non-finite public OHLCV values. The existing numeric type check admits NaN and infinities into preview/backtest candles.
 - Plan: reproduce with a mocked public source, filter malformed rows, run focused offline tests with one worker. No builds, credentials, exchange requests, or deployment commands.
+- Reproduced: three regression cases failed before the fix (NaN, positive infinity, negative infinity, each across all six OHLCV fields). Pushed test milestone `6469dc7`.
+- Added a finite-number check to the existing row filter. Four new tests also preserve valid zero volume, row ordering, missing-field rejection, default arguments, and the candle request cap.
+- Validation: `npx --no-install vitest run src/test/strategy-market-data.test.ts src/test/strategy-preview.test.ts src/test/strategy-runtime.test.ts src/test/pnl-split.test.ts src/test/ux-p0.test.ts --maxWorkers=1 --minWorkers=1` passed all 35 tests in five files; `git diff --check` passed.

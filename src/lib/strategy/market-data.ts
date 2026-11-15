@@ -15,6 +15,6 @@ export async function createPublicExchange(exchangeId: string): Promise<PublicOh
 export async function fetchPublicCandles(src: PublicOhlcvSource, symbol: string, timeframe = '1h', limit = 500): Promise<Candle[]> {
   const rows = await src.fetchOHLCV(symbol, timeframe, undefined, Math.min(limit, LIMITS.maxCandles))
   return rows
-    .filter((r) => r.length >= 6 && r.every((v) => typeof v === 'number'))
+    .filter((r) => r.length >= 6 && r.every((v) => typeof v === 'number' && Number.isFinite(v)))
     .map(([time, open, high, low, close, volume]) => ({ time, open, high, low, close, volume }) as Candle)
 }
