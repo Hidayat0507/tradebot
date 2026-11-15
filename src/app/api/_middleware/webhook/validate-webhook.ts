@@ -12,6 +12,17 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
 
   const alert = { ...(data as Record<string, unknown>) };
 
+  // Accept complete decimal strings (including exponents), never a numeric prefix.
+  // Normalize once so validation and the returned signal use the same value.
+  for (const field of ['price', 'amount', 'stoplossPercent', 'order_size']) {
+    const value = alert[field];
+    if (typeof value === 'string') {
+      const text = value.trim();
+      alert[field] = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)
+        ? Number(text) : NaN;
+    }
+  }
+
   // Convert action to lowercase if it exists
   if (typeof alert.action === 'string') {
     alert.action = alert.action.toLowerCase();
@@ -22,27 +33,28 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
     alert,
     ['bot_id', 'symbol', 'action', 'secret', 'ts', 'alert_id'],
     {
-      action: (value) => 
-        (typeof value === 'string' && ['buy', 'sell'].includes(value)) || 
+      action: (value) =>
+        (typeof value === 'string' && ['buy', 'sell'].includes(value)) ||
         'Invalid action (must be buy or sell)',
       price: (value) => {
-        // Convert string to number if needed
-        const numValue = typeof value === 'string' ? parseFloat(value) : value;
-        return typeof numValue === 'undefined' || 
+        const numValue = value;
+        return typeof numValue === 'undefined' ||
           (typeof numValue === 'number' && Number.isFinite(numValue) && numValue > 0) ||
           'Price must be a positive number';
       },
+      amount: (value) =>
+        typeof value === 'undefined' ||
+        (typeof value === 'number' && Number.isFinite(value) && value > 0) ||
+        'Amount must be a positive number',
       stoplossPercent: (value) => {
-        // Convert string to number if needed
-        const numValue = typeof value === 'string' ? parseFloat(value) : value;
-        return typeof numValue === 'undefined' || 
-          (typeof numValue === 'number' && !isNaN(numValue) && numValue > 0 && numValue < 100) || 
+        const numValue = value;
+        return typeof numValue === 'undefined' ||
+          (typeof numValue === 'number' && Number.isFinite(numValue) && numValue > 0 && numValue < 100) ||
           'Stoploss percentage must be between 0 and 100';
       },
       order_size: (value) => {
-        // Convert string to number if needed
-        const numValue = typeof value === 'string' ? parseFloat(value) : value;
-        return typeof numValue === 'undefined' || 
+        const numValue = value;
+        return typeof numValue === 'undefined' ||
           (typeof numValue === 'number' && Number.isFinite(numValue) && numValue > 0 && numValue <= 100) ||
           'order_size must be a percent of balance between 0 and 100';
       }
@@ -68,7 +80,7 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
   // Remove secret before returning
   delete (alert as Record<string, unknown>).secret;
   const alertWithoutSecret = alert as Record<string, unknown>;
-  
+
   // Build strongly typed result
   const result: TradingViewSignal = {
     ts: new Date(ts).toISOString(),
@@ -82,28 +94,12 @@ export function validateWebhookAlert(data: unknown): TradingViewSignal {
     amount: alertWithoutSecret.amount as number | undefined,
     order_size: alertWithoutSecret.order_size as number | undefined,
   };
-  
-  if (typeof (result.price as unknown) === 'string') {
-    result.price = parseFloat(result.price as unknown as string);
-  }
-  
-  if (typeof (result.stoplossPercent as unknown) === 'string') {
-    result.stoplossPercent = parseFloat(result.stoplossPercent as unknown as string);
-  }
-  
-  if (typeof (result.amount as unknown) === 'string') {
-    result.amount = parseFloat(result.amount as unknown as string);
-  }
-  
-  if (typeof (result.order_size as unknown) === 'string') {
-    result.order_size = parseFloat(result.order_size as unknown as string);
-  }
 
   logger.info('Webhook alert validated', {
     botId: result.bot_id,
     symbol: result.symbol,
     action: result.action
   });
-  
+
   return result;
-} 
+}
