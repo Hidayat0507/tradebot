@@ -19,3 +19,4 @@
 - Reproduced: three regression cases failed before the fix (NaN, positive infinity, negative infinity, each across all six OHLCV fields). Pushed test milestone `6469dc7`.
 - Added a finite-number check to the existing row filter. Four new tests also preserve valid zero volume, row ordering, missing-field rejection, default arguments, and the candle request cap.
 - Validation: `npx --no-install vitest run src/test/strategy-market-data.test.ts src/test/strategy-preview.test.ts src/test/strategy-runtime.test.ts src/test/pnl-split.test.ts src/test/ux-p0.test.ts --maxWorkers=1 --minWorkers=1` passed all 35 tests in five files; `git diff --check` passed.
+- Pushed implementation `b119d35` and updated existing draft #34 title/body for both fixes. Live `gh pr view` at 2026-11-15T22:06:50Z: `MERGEABLE`, merge state `UNSTABLE`, draft into `main`. Appended task 940 self-review to `docs/REVIEW-tradebot-filler-930.md`.
