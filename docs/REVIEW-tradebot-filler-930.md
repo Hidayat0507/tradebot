@@ -34,3 +34,16 @@ Observed with `gh pr view 34 --json number,url,isDraft,baseRefName,headRefOid,me
 - Validation: 35 tests in five files passed with the one-worker command in the progress note; `git diff --check` passed. Public candle fetching is mocked; no exchange network requests were made.
 - No blocking findings. This remains a numeric validity filter, not validation of OHLC price relationships, timestamp ordering, or candle completeness. Full builds and credential-driven integrations were not run.
 - Test and implementation milestones were committed and pushed normally. No secrets or environment files were read, no deployments or real trades were performed, and no merge or force-push was attempted.
+
+## Task 950 live state and self-review
+
+Observed with `gh pr view 34 --json number,url,isDraft,baseRefName,headRefOid,mergeable,mergeStateStatus` at 2026-11-15T22:09:17Z:
+
+- Existing PR #34 remains the single draft for `ai/task-tradebot-filler-930` into `main`.
+- Implementation head: `7558bd6ac82f108f00563fc85e81b2e9ae404db3`.
+- `mergeable`: `MERGEABLE`; `mergeStateStatus`: `UNSTABLE`. The initial post-push response was `UNKNOWN`; the follow-up resolved it. This is a mergeability observation, not evidence of passing CI.
+- Reviewed the incremental diff and existing runtime changes against `origin/main`. Task 950 changes only paper FIFO timestamp comparison from lexical text to parsed instants; lot matching, rounding, paper filtering, and trade execution are unchanged.
+- All three new regressions failed before the fix. Different UTC offsets and fractional-second precision previously caused profitable sells to be unmatched; equivalent instants could reorder buy lots and change realized PnL from 20 to 10. Tests now verify correct PnL, closed trades, wins, win rate, open size, stable ties, and preservation of caller array order.
+- Validation: 62 tests in seven files passed with the one-worker command in the progress note; `git diff --check` passed. Existing mocked dashboard API tests passed too. No blocking findings.
+- Limitation: this fixes ordering of valid ISO timestamps from the database. Invalid dates remain outside this change's scope, and equal instants retain the supplied order because no finer chronology is available. Full builds and external integration tests were not run.
+- Test and implementation milestones were committed and pushed normally. No secrets or environment files were read, no exchange requests, deployment, or real trades were performed, and nothing was merged or force-pushed.
