@@ -4,6 +4,7 @@ import type { SupportedExchange } from '@/lib/database/schema';
 export const runtime = 'nodejs';
 import { logger, normalizeError } from '@/lib/logging';
 import { listEnabledExchanges } from '@/lib/exchanges/registry';
+import { ORDER_SIZE } from '@/lib/bot-config';
 
 export class ApiError extends Error {
   constructor(
@@ -116,7 +117,18 @@ const enabledExchangeSet = new Set<SupportedExchange>(
   listEnabledExchanges().map((plugin) => plugin.id)
 );
 
+/** Validate supplied default order sizes for both creation and partial updates. */
+export function validateBotOrderSize(data: { max_position_size?: unknown }) {
+  const value = data.max_position_size
+  if (value === undefined) return
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < ORDER_SIZE.min || value > ORDER_SIZE.max) {
+    throw new ApiError(`Order size must be a finite number between ${ORDER_SIZE.min} and ${ORDER_SIZE.max}% of balance`, 400)
+  }
+}
+
 export function validateBotData(data: Record<string, unknown>) {
+  validateBotOrderSize(data);
+
   validateFields(
     data,
     ['name', 'exchange', 'pair'],
