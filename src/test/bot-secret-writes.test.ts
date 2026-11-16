@@ -93,3 +93,47 @@ describe('service-only bot credential writes', () => {
     expect(mocks.createService).not.toHaveBeenCalled()
   })
 })
+
+describe('bot order-size request validation', () => {
+  const required = { name: 'bot', exchange: 'bitget', pair: 'BTC/USDT' }
+
+  describe.each(['create', 'update'] as const)('%s', action => {
+    const submit = (body: Record<string, unknown>) => action === 'create'
+      ? createBot(request(body)) : PUT(request(body), props)
+
+    it.each([0, -1, 0.001, 100.01, null, '25', '', true, [], {}].map(value => [value]))(
+      'rejects invalid order size %j before service access', async max_position_size => {
+        const response = await submit({ ...required, max_position_size })
+        expect(response.status).toBe(400)
+        expect((await response.json()).error).toContain('Order size')
+        expect(mocks.createService).not.toHaveBeenCalled()
+        expect(writeQuery.insert).not.toHaveBeenCalled()
+        expect(writeQuery.update).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each(['1e400', '-1e400'])('rejects JSON numeric overflow %s', async number => {
+      const req = new NextRequest('http://localhost/api/bots', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(required).replace(/}$/, `,"max_position_size":${number}}`),
+      })
+      const response = await (action === 'create' ? createBot(req) : PUT(req, props))
+      expect(response.status).toBe(400)
+      expect(mocks.createService).not.toHaveBeenCalled()
+    })
+
+    it.each([0.01, 25, 100])('preserves valid order size %s', async max_position_size => {
+      const response = await submit({ ...required, max_position_size })
+      expect(response.status).toBe(action === 'create' ? 201 : 200)
+      const write = action === 'create' ? writeQuery.insert : writeQuery.update
+      expect(write).toHaveBeenCalledWith(expect.objectContaining({ max_position_size }))
+    })
+
+    it('allows an omitted order size', async () => {
+      const response = await submit(required)
+      expect(response.status).toBe(action === 'create' ? 201 : 200)
+      const write = action === 'create' ? writeQuery.insert : writeQuery.update
+      expect(write.mock.calls[0][0].max_position_size).toBe(action === 'create' ? 0.01 : undefined)
+    })
+  })
+})
