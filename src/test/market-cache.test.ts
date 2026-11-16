@@ -13,7 +13,43 @@ const entries = [
   ['bitget', 'BTC/USDT', 'ticker-extra'],
 ] as const
 
-afterEach(() => marketCache.clear())
+afterEach(() => {
+  marketCache.clear()
+  vi.useRealTimers()
+})
+
+describe('market cache expiry', () => {
+  it.each([
+    ['ticker', 20_000],
+    ['orderBook', 20_000],
+    ['ohlcv', 60_000],
+    ['custom', 20_000],
+    ['constructor', 20_000],
+    ['toString', 20_000],
+    ['__proto__', 20_000],
+  ])('expires %s entries exactly at their %i ms TTL', (dataType, ttl) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    marketCache.set('bitget', 'BTC/USDT', dataType, { price: 100 })
+
+    vi.advanceTimersByTime(ttl - 1)
+    expect(marketCache.get('bitget', 'BTC/USDT', dataType)).toEqual({ price: 100 })
+    vi.advanceTimersByTime(1)
+    expect(marketCache.get('bitget', 'BTC/USDT', dataType)).toBeNull()
+    expect(marketCache.getStats().size).toBe(0)
+  })
+
+  it('refreshes the expiry when an entry is replaced', () => {
+    vi.useFakeTimers()
+    marketCache.set('bitget', 'BTC/USDT', 'ticker', 100)
+    vi.advanceTimersByTime(10_000)
+    marketCache.set('bitget', 'BTC/USDT', 'ticker', 101)
+    vi.advanceTimersByTime(10_000)
+    expect(marketCache.get('bitget', 'BTC/USDT', 'ticker')).toBe(101)
+    vi.advanceTimersByTime(10_000)
+    expect(marketCache.get('bitget', 'BTC/USDT', 'ticker')).toBeNull()
+  })
+})
 
 describe('market cache selective invalidation', () => {
   it.each([
