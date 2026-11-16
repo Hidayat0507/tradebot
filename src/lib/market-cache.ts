@@ -9,6 +9,9 @@ import { logger } from '@/lib/logging';
 
 // Cache entry type
 interface CacheEntry<T> {
+  exchange: string;
+  symbol: string;
+  dataType: string;
   data: T;
   timestamp: number;
 }
@@ -98,6 +101,9 @@ class MarketDataCache {
   set<T>(exchange: string, symbol: string, dataType: string, data: T): void {
     const key = this.generateKey(exchange, symbol, dataType);
     this.cache.set(key, {
+      exchange: exchange.toLowerCase(),
+      symbol,
+      dataType,
       data,
       timestamp: Date.now(),
     });
@@ -114,23 +120,18 @@ class MarketDataCache {
       return;
     }
     
-    // Clear specific entries
-    const prefix = [
-      exchange?.toLowerCase() || '',
-      symbol || '',
-      dataType || '',
-    ].filter(Boolean).join(':');
-    
-    // If we have a prefix, delete all keys that start with it
-    if (prefix) {
-      for (const key of this.cache.keys()) {
-        if (key.startsWith(prefix)) {
-          this.cache.delete(key);
-        }
+    // Match each supplied selector independently. Symbols may contain colons
+    // (e.g. BTC/USDT:USDT), so do not infer fields from the serialized key.
+    const normalizedExchange = exchange?.toLowerCase();
+    for (const [key, entry] of this.cache) {
+      if ((!normalizedExchange || entry.exchange === normalizedExchange) &&
+          (!symbol || entry.symbol === symbol) &&
+          (!dataType || entry.dataType === dataType)) {
+        this.cache.delete(key);
       }
-      
-      logger.info('Market data cache entries cleared', { prefix });
     }
+
+    logger.info('Market data cache entries cleared', { exchange: normalizedExchange, symbol, dataType });
   }
 
   /**
@@ -145,4 +146,4 @@ class MarketDataCache {
 }
 
 // Create and export a singleton instance
-export const marketCache = new MarketDataCache(); 
+export const marketCache = new MarketDataCache();
