@@ -6,7 +6,8 @@ import {
   handleApiError,
   successResponse,
   ApiError,
-  validateFields
+  validateFields,
+  validateBotOrderSize
 } from '@/app/api/_middleware/api-handler'
 import { encrypt } from '@/utils/encryption'
 import { logger, normalizeError } from '@/lib/logging'
@@ -42,6 +43,7 @@ export async function PUT(
     const body = await request.json() as BotFormData
     
     // Validate update data
+    validateBotOrderSize(body)
     if (body.exchange) {
       validateFields(
         body,
