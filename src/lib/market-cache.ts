@@ -83,11 +83,13 @@ class MarketDataCache {
     }
     
     // Get the appropriate TTL for this data type
-    const ttl = this.config.ttls[dataType as keyof typeof this.config.ttls] || this.config.defaultTtl;
+    const ttl = Object.prototype.hasOwnProperty.call(this.config.ttls, dataType)
+      ? this.config.ttls[dataType as keyof typeof this.config.ttls]
+      : this.config.defaultTtl;
     const now = Date.now();
     
     // Check if the entry is expired
-    if (now - entry.timestamp > ttl) {
+    if (now - entry.timestamp >= ttl) {
       this.cache.delete(key);
       return null;
     }
