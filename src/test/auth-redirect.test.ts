@@ -2,7 +2,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { authDestination } from '@/lib/auth-redirect'
 
+const normalizedAuthPaths = [
+  '/bots/../auth',
+  '/bots/../auth/confirm?next=/bots',
+  '/./auth#sign-in',
+  '/%2e/auth',
+  '/bots/%2E%2e/auth',
+  '/bots/.%2e/auth/login',
+  '/bots/%2e./auth',
+]
+
 describe('post-sign-in destination', () => {
+  it.each(normalizedAuthPaths)('rejects browser-normalized auth loops: %s', next => {
+    expect(authDestination(next)).toBe('/dashboard')
+  })
+  it.each([
+    '/bots/../dashboard?tab=trades#recent',
+    '/bots?next=/auth',
+    '/bots#auth',
+    '/authors',
+    '/authentic',
+  ])('preserves accepted paths, queries and fragments: %s', next => {
+    expect(authDestination(next)).toBe(next)
+  })
   it('defaults to dashboard and preserves local next paths and queries', () => {
     expect(authDestination(null)).toBe('/dashboard')
     expect(authDestination('/bots/create?pair=BTC%2FUSDT')).toBe('/bots/create?pair=BTC%2FUSDT')
@@ -44,6 +66,13 @@ describe('email confirmation destination', () => {
   ])('falls back to dashboard after successful verification for %s', async next => {
     await expect(GET(request(next))).rejects.toThrow('redirect:/dashboard')
     expect(mocks.verifyOtp).toHaveBeenCalledWith({ token_hash: 'test-confirmation-token', type: 'email' })
+    expect(mocks.redirect).toHaveBeenCalledTimes(1)
+    expect(mocks.redirect).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it.each(normalizedAuthPaths)('rejects normalized auth loops after verification: %s', async next => {
+    await expect(GET(request(next))).rejects.toThrow('redirect:/dashboard')
+    expect(mocks.verifyOtp).toHaveBeenCalledTimes(1)
     expect(mocks.redirect).toHaveBeenCalledTimes(1)
     expect(mocks.redirect).toHaveBeenCalledWith('/dashboard')
   })
