@@ -7,7 +7,8 @@ import { LIMITS, type Candle } from './types'
 import { PUBLIC_EXCHANGES, TIMEFRAMES } from './exchanges'
 
 const candleSchema = z.object({
-  time: z.number(), open: z.number(), high: z.number(), low: z.number(), close: z.number(), volume: z.number(),
+  time: z.number().finite(), open: z.number().finite(), high: z.number().finite(),
+  low: z.number().finite(), close: z.number().finite(), volume: z.number().finite(),
 })
 
 export const previewSchema = z.object({
