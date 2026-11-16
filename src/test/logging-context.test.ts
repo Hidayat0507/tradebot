@@ -4,6 +4,20 @@ import { logger } from '@/lib/logging'
 afterEach(() => vi.restoreAllMocks())
 
 describe('log context serialization', () => {
+  it.each(['webhookUrl', 'webhook_url', 'WEBHOOK_URL', 'WebhookURL'])('redacts credential-bearing %s fields at every depth', key => {
+    const output = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fakeUrl = 'https://example.invalid/api/webhooks/test-id/dummy-test-value'
+    const context = { [key]: fakeUrl, deliveries: [{ [key]: fakeUrl, status: 503 }], symbol: 'BTC/USDT' }
+
+    logger.error('Notification failed', new Error('offline'), context)
+
+    expect(JSON.parse(output.mock.calls[0][0]).context).toEqual({
+      [key]: '[REDACTED]', deliveries: [{ [key]: '[REDACTED]', status: 503 }], symbol: 'BTC/USDT',
+    })
+    expect(output.mock.calls[0][0]).not.toContain(fakeUrl)
+    expect(context[key]).toBe(fakeUrl)
+  })
+
   it('handles circular objects without interrupting error reporting', () => {
     const output = vi.spyOn(console, 'error').mockImplementation(() => {})
     const context: Record<string, unknown> = { operation: 'balance' }

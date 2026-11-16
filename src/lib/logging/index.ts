@@ -40,6 +40,9 @@ class Logger {
       k === 'apiKey'.toLowerCase() ||
       k === 'api_secret' ||
       k === 'webhook_secret' ||
+      // Incoming webhook URLs contain credentials in their path (e.g. Discord).
+      k === 'webhookurl' ||
+      k === 'webhook_url' ||
       k === 'set-cookie' ||
       k === 'cookie' ||
       k.includes('private') ||
