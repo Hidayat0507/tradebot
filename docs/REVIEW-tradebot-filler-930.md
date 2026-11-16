@@ -1,0 +1,49 @@
+# Task 930 self-review
+
+PR: https://github.com/Hidayat0507/tradebot/pull/34 (draft into `main`).
+
+## Live GitHub state
+
+Observed with `gh pr view 34 --repo Hidayat0507/tradebot --json number,url,isDraft,baseRefName,headRefOid,mergeable,mergeStateStatus` at 2026-11-15T20:10:42Z:
+
+- Head: `f4e55eafa7805d2b71d8067c9edb0a107413d396` (implementation milestone).
+- `isDraft`: `true`; `baseRefName`: `main`.
+- `mergeable`: `MERGEABLE`.
+- `mergeStateStatus`: `UNSTABLE`.
+- The initial GitHub response briefly returned `UNKNOWN`. Its check rollup reported a pending Vercel status. No Vercel tools or URLs were accessed and no deployment command was run. GitHub mergeability does not imply passing checks.
+
+## Self-review
+
+- Reviewed the diff against `origin/main`. The production change only adds the missing upper time bound to dashboard 24h PnL aggregation.
+- Future gains and losses no longer affect 24h cards. All-time PnL, row counts, returned history, rounding, and live/paper separation retain their existing behavior.
+- The interval remains `(now - 24 hours, now]`; tests explicitly preserve the exclusive lower boundary and include the upper boundary.
+- Nine deterministic new tests cover live/paper/simulated modes, both timestamp boundaries, null PnL, and invalid dates. Four failed before the implementation, then all nine passed.
+- Validation: `npx --no-install vitest run src/test/pnl-split.test.ts src/test/ux-p0.test.ts --maxWorkers=1 --minWorkers=1` passed 19 tests in two files. `git diff --check` passed.
+- No blocking findings. Limitation: this bounds display aggregation against the supplied clock; it does not repair malformed or future-dated stored rows. Full builds and integration tests were unnecessary for this pure aggregation change and were not run.
+- No credentials or secrets files were read, no exchange calls or real trades were made, and nothing was merged or force-pushed.
+
+## Task 940 live state and self-review
+
+Observed with `gh pr view 34 --json number,url,isDraft,baseRefName,headRefOid,mergeable,mergeStateStatus` at 2026-11-15T22:06:50Z:
+
+- Reused existing PR #34 on the required branch; it remains draft into `main`.
+- Implementation head: `b119d3596c1165bffa198b0ada08bdfa96d33ce9`.
+- `mergeable`: `MERGEABLE`; `mergeStateStatus`: `UNSTABLE`. The first response after pushing was `UNKNOWN`; the follow-up above is the live resolved state. This does not establish passing CI.
+- Reviewed the incremental fix and tests against `origin/main`: the only new runtime change adds `Number.isFinite` to the existing public-candle row filter. No strategy rules, exchange construction, or trading execution changed.
+- Regression tests rejected NaN, positive infinity, and negative infinity in each of the six OHLCV fields. All three cases failed before the fix and passed afterward. Finite rows (including zero volume), ordering, missing-field rejection, default request arguments, and the request cap are covered.
+- Validation: 35 tests in five files passed with the one-worker command in the progress note; `git diff --check` passed. Public candle fetching is mocked; no exchange network requests were made.
+- No blocking findings. This remains a numeric validity filter, not validation of OHLC price relationships, timestamp ordering, or candle completeness. Full builds and credential-driven integrations were not run.
+- Test and implementation milestones were committed and pushed normally. No secrets or environment files were read, no deployments or real trades were performed, and no merge or force-push was attempted.
+
+## Task 950 live state and self-review
+
+Observed with `gh pr view 34 --json number,url,isDraft,baseRefName,headRefOid,mergeable,mergeStateStatus` at 2026-11-15T22:09:17Z:
+
+- Existing PR #34 remains the single draft for `ai/task-tradebot-filler-930` into `main`.
+- Implementation head: `7558bd6ac82f108f00563fc85e81b2e9ae404db3`.
+- `mergeable`: `MERGEABLE`; `mergeStateStatus`: `UNSTABLE`. The initial post-push response was `UNKNOWN`; the follow-up resolved it. This is a mergeability observation, not evidence of passing CI.
+- Reviewed the incremental diff and existing runtime changes against `origin/main`. Task 950 changes only paper FIFO timestamp comparison from lexical text to parsed instants; lot matching, rounding, paper filtering, and trade execution are unchanged.
+- All three new regressions failed before the fix. Different UTC offsets and fractional-second precision previously caused profitable sells to be unmatched; equivalent instants could reorder buy lots and change realized PnL from 20 to 10. Tests now verify correct PnL, closed trades, wins, win rate, open size, stable ties, and preservation of caller array order.
+- Validation: 62 tests in seven files passed with the one-worker command in the progress note; `git diff --check` passed. Existing mocked dashboard API tests passed too. No blocking findings.
+- Limitation: this fixes ordering of valid ISO timestamps from the database. Invalid dates remain outside this change's scope, and equal instants retain the supplied order because no finer chronology is available. Full builds and external integration tests were not run.
+- Test and implementation milestones were committed and pushed normally. No secrets or environment files were read, no exchange requests, deployment, or real trades were performed, and nothing was merged or force-pushed.

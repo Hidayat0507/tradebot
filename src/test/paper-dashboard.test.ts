@@ -18,6 +18,33 @@ const t = (i: number, side: string, size: number, price: number, over: Partial<P
 })
 
 describe('computePaperPnl', () => {
+  it.each([
+    ['2026-01-01T02:00:00+02:00', '2025-12-31T19:01:00-05:00'],
+    ['2026-01-01T00:00:00Z', '2026-01-01T00:00:00.500Z'],
+  ])('matches buys before sells by instant (%s → %s)', (buyTime, sellTime) => {
+    const rows = [
+      t(2, 'sell', 1, 120, { created_at: sellTime }),
+      t(1, 'buy', 2, 100, { created_at: buyTime }),
+    ]
+    const original = rows.slice()
+    expect(computePaperPnl(rows)).toEqual({
+      realized: 20, closedTrades: 1, wins: 1, winRate: 1,
+      byBot: { b1: { realized: 20, closedTrades: 1, openSize: 1 } },
+    })
+    expect(rows).toEqual(original)
+  })
+
+  it('preserves input order for simultaneous buys with different timestamp formats', () => {
+    expect(computePaperPnl([
+      t(1, 'buy', 1, 100, { created_at: '2026-01-01T00:00:00Z' }),
+      t(2, 'buy', 1, 110, { created_at: '2026-01-01T00:00:00.000Z' }),
+      t(3, 'sell', 1, 120, { created_at: '2026-01-01T00:01:00Z' }),
+    ])).toMatchObject({
+      realized: 20, closedTrades: 1,
+      byBot: { b1: { realized: 20, closedTrades: 1, openSize: 1 } },
+    })
+  })
+
   it('FIFO realized PnL, win rate, open size; ignores live trades and bad rows', () => {
     const r = computePaperPnl([
       t(3, 'sell', 1, 90),            // closes rest of lot1 (0.5@100) + 0.5 of lot2(@110)

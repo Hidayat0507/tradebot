@@ -7,7 +7,11 @@ export const isPaperEntry = (t: Pick<ModeTrade, 'paper' | 'simulated'>) => !!(t.
 
 export function splitByMode<T extends ModeTrade>(trades: T[], now = Date.now()): { live: ModeTotals; paper: ModeTotals; liveTrades: T[]; paperTrades: T[] } {
   const totals = (xs: T[]): ModeTotals => ({
-    pnl24h: round(xs.filter((t) => t.pnl !== null && Date.parse(t.timestamp) > now - 86_400_000).reduce((a, t) => a + (t.pnl ?? 0), 0)),
+    pnl24h: round(xs.filter((t) => {
+      const timestamp = Date.parse(t.timestamp)
+      // The trailing window ends at now; future-dated rows remain in history only.
+      return t.pnl !== null && timestamp > now - 86_400_000 && timestamp <= now
+    }).reduce((a, t) => a + (t.pnl ?? 0), 0)),
     pnlAll: round(xs.reduce((a, t) => a + (t.pnl ?? 0), 0)),
     trades: xs.length,
   })
